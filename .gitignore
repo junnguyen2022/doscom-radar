@@ -1,0 +1,36 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# editor
+.vscode/
+.idea/
+.DS_Store
+
+# claude
+.claude/settings.local.json
+
+# local file-storage fallback (used when Supabase env unset)
+data/*.json
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+*.jpg
+*.jpeg
+*.png
+*.gif
+!public/**/*.jpg
+!public/**/*.png
