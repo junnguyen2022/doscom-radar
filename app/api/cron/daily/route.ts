@@ -105,10 +105,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Step 2 — enrich top repos via GraphQL (~25s)
-  // Cap reduced from 50 → 30 to leave headroom for AI insight step.
+  // Cap reduced to 20 to leave headroom for AI insight step (60s timeout).
+  // Was 50 → 30 → 20. GraphQL search aliases (4/repo) are heavier than expected.
   if (currentBackend() === "supabase") {
     const enrichResult = await timed("enrich", async () => {
-      return await runEnrichment({ cap: 30, delayMs: 50 });
+      return await runEnrichment({ cap: 20, delayMs: 30 });
     });
     results.push(enrichResult);
   } else {
