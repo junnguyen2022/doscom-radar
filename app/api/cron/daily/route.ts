@@ -136,12 +136,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Step 4 — AI insights (Phase 4) — top 5 by radar_score
-  // Skip if elapsed > 45s to avoid 60s function timeout.
+  // Step 4 — AI insights (Phase 4) — top 3 by radar_score
+  // Each Claude call = 5-7s. Cap 3 keeps us under 60s function timeout.
+  // Idempotent: subsequent cron runs cover the next 3 (skipping already-done).
   const elapsedBeforeInsight = Date.now() - start;
   if (currentBackend() === "supabase" && elapsedBeforeInsight < 45000) {
     const insightResult = await timed("insight", async () => {
-      return await runInsightBatch(5);
+      return await runInsightBatch(3);
     });
     results.push(insightResult);
   } else {
