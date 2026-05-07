@@ -31,6 +31,10 @@ export type EnrichedRepo = {
   contributors_sample: { login: string; avatar_url: string }[];
   contributors_count: number | null;
   commits_30d: number | null;
+  prs_merged_30d: number | null;
+  prs_open_30d: number | null;
+  issues_opened_30d: number | null;
+  issues_closed_30d: number | null;
   latest_release_at: string | null;
   latest_release_tag: string | null;
   prs_merged_total: number | null;
@@ -38,7 +42,15 @@ export type EnrichedRepo = {
 };
 
 const REPO_QUERY = `
-  query RepoEnrichment($owner: String!, $name: String!, $since: GitTimestamp!) {
+  query RepoEnrichment(
+    $owner: String!,
+    $name: String!,
+    $since: GitTimestamp!,
+    $prsMergedQ: String!,
+    $prsOpenQ: String!,
+    $issuesOpenedQ: String!,
+    $issuesClosedQ: String!
+  ) {
     repository(owner: $owner, name: $name) {
       databaseId
       nameWithOwner
@@ -78,6 +90,10 @@ const REPO_QUERY = `
         nodes { login avatarUrl(size: 64) }
       }
     }
+    prsMerged30d: search(query: $prsMergedQ, type: ISSUE) { issueCount }
+    prsOpen30d: search(query: $prsOpenQ, type: ISSUE) { issueCount }
+    issuesOpened30d: search(query: $issuesOpenedQ, type: ISSUE) { issueCount }
+    issuesClosed30d: search(query: $issuesClosedQ, type: ISSUE) { issueCount }
     rateLimit { remaining limit resetAt cost }
   }
 `;
@@ -115,6 +131,10 @@ type GraphQLResponse = {
         nodes: { login: string; avatarUrl: string }[];
       };
     } | null;
+    prsMerged30d: { issueCount: number };
+    prsOpen30d: { issueCount: number };
+    issuesOpened30d: { issueCount: number };
+    issuesClosed30d: { issueCount: number };
     rateLimit: {
       remaining: number;
       limit: number;
@@ -177,10 +197,16 @@ export async function fetchRepoEnrichment(
   repo: string,
 ): Promise<EnrichedRepo | null> {
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const sinceDate = since.slice(0, 10);
+  const repoQ = `repo:${owner}/${repo}`;
   const json = await gql<GraphQLResponse>(REPO_QUERY, {
     owner,
     name: repo,
     since,
+    prsMergedQ: `${repoQ} is:pr is:merged merged:>=${sinceDate}`,
+    prsOpenQ: `${repoQ} is:pr is:open created:>=${sinceDate}`,
+    issuesOpenedQ: `${repoQ} is:issue created:>=${sinceDate}`,
+    issuesClosedQ: `${repoQ} is:issue is:closed closed:>=${sinceDate}`,
   });
 
   if (!json.data?.repository) return null;
@@ -226,6 +252,10 @@ export async function fetchRepoEnrichment(
     })),
     contributors_count: r.mentionableUsers.totalCount ?? null,
     commits_30d: r.defaultBranchRef?.target?.history?.totalCount ?? null,
+    prs_merged_30d: json.data.prsMerged30d?.issueCount ?? null,
+    prs_open_30d: json.data.prsOpen30d?.issueCount ?? null,
+    issues_opened_30d: json.data.issuesOpened30d?.issueCount ?? null,
+    issues_closed_30d: json.data.issuesClosed30d?.issueCount ?? null,
     latest_release_at: r.releases.nodes[0]?.publishedAt ?? null,
     latest_release_tag: r.releases.nodes[0]?.tagName ?? null,
     prs_merged_total: r.pullRequests.totalCount,

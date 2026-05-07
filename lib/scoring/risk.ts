@@ -59,7 +59,11 @@ export function computeRiskPenalty(r: RiskInput): RiskResult {
       penalty += RISK_PENALTIES.no_recent_release;
     }
   }
-  if ((r.contributors_count ?? 0) <= 1) {
+  // Only flag single-maintainer risk for less-popular repos.
+  // Popular repos (>=5k stars) typically have many contributors via PRs
+  // even if GraphQL mentionableUsers undercounts. False-positive guard.
+  const totalStarsForCheck = r.total_stars ?? 0;
+  if ((r.contributors_count ?? 0) <= 1 && totalStarsForCheck < 5000) {
     flags.push("single_maintainer_risk");
     penalty += RISK_PENALTIES.single_maintainer_risk;
   }

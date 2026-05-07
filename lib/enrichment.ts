@@ -130,15 +130,14 @@ export async function upsertEnrichedRepos(
         pushed_within_days: pushedDays,
         latest_release_at: e.latest_release_at,
         latest_release_tag: e.latest_release_tag,
-        // Phase 2: GraphQL fetches commits_30d via history(since:); contributors via mentionableUsers totalCount.
+        // Phase 2 (C): GraphQL search aliases for 30d windows.
         contributors_count: e.contributors_count,
         commits_30d: e.commits_30d,
-        // PR/issue deltas still need separate queries — defer to Phase 3
-        prs_open_30d: null,
-        prs_merged_30d: null,
-        issues_opened_30d: null,
-        issues_closed_30d: null,
-        // Stars deltas — computed by separate job after we have ≥7 days history
+        prs_open_30d: e.prs_open_30d,
+        prs_merged_30d: e.prs_merged_30d,
+        issues_opened_30d: e.issues_opened_30d,
+        issues_closed_30d: e.issues_closed_30d,
+        // Stars deltas — computed by computeStarsDeltas() after we have ≥7 days history.
         stars_delta_1d: null,
         stars_delta_7d: null,
         stars_delta_30d: null,
