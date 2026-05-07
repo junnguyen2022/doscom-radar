@@ -25,6 +25,8 @@ import {
   getLatestMetrics,
   type MetricRow,
 } from "@/lib/enrichment";
+import { getLatestScoreForRepo } from "@/lib/scoring-store";
+import { ScoreBreakdown, type ScoreData } from "@/components/repo/ScoreBreakdown";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { LanguageDot } from "@/components/ui/LanguageDot";
@@ -83,9 +85,30 @@ export default async function RepoDetail({
     getRepository(owner, repo),
   ]);
 
-  // Get latest enriched metrics if repo is enriched
-  const metrics: MetricRow | null = repository
-    ? await getLatestMetrics(repository.id)
+  // Get latest enriched metrics + score if repo is enriched
+  const [metrics, scoreRow]: [MetricRow | null, Awaited<ReturnType<typeof getLatestScoreForRepo>>] = repository
+    ? await Promise.all([
+        getLatestMetrics(repository.id),
+        getLatestScoreForRepo(repository.id),
+      ])
+    : [null, null];
+
+  const score: ScoreData | null = scoreRow
+    ? {
+        radar_score: Number(scoreRow.radar_score),
+        heat_score: Number(scoreRow.heat_score),
+        growth_score: Number(scoreRow.growth_score),
+        activity_score: Number(scoreRow.activity_score),
+        community_score: Number(scoreRow.community_score),
+        maintenance_score: Number(scoreRow.maintenance_score),
+        relevance_score: Number(scoreRow.relevance_score),
+        risk_penalty: Number(scoreRow.risk_penalty),
+        recommendation: scoreRow.recommendation,
+        confidence: scoreRow.confidence,
+        risk_flags: scoreRow.risk_flags ?? [],
+        relevance_tier: scoreRow.relevance_tier,
+        score_reason: scoreRow.score_reason,
+      }
     : null;
 
   if (
@@ -416,6 +439,13 @@ export default async function RepoDetail({
           Snapshots
         </a>
       </nav>
+
+      {/* Score breakdown — Phase 2 */}
+      {score && (
+        <section id="score" className="mb-8">
+          <ScoreBreakdown score={score} />
+        </section>
+      )}
 
       {/* Overview — dual charts */}
       <section id="overview" className="mb-12 grid gap-6 lg:grid-cols-2">

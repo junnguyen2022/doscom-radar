@@ -24,6 +24,14 @@ import {
   type TrendingTableRow,
 } from "@/components/home/TrendingTable";
 import { FAQ } from "@/components/home/FAQ";
+import {
+  TopTestCandidates,
+  HighRiskPopular,
+} from "@/components/home/TopTestCandidates";
+import {
+  getTopByRecommendation,
+  getHighRiskPopular,
+} from "@/lib/scoring-store";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
@@ -81,6 +89,12 @@ export default async function Home() {
     lastSnapshotInfo(),
     distinctDailyDates(),
     snapshotCountsByDate("daily", 14),
+  ]);
+
+  // Phase 2 — scoring sections
+  const [testCandidates, riskPopular] = await Promise.all([
+    getTopByRecommendation("test", 6).catch(() => []),
+    getHighRiskPopular(4).catch(() => []),
   ]);
 
   // Hot collections (top 8 by matched count)
@@ -223,6 +237,10 @@ export default async function Home() {
           </Card>
         )}
       </section>
+
+      <TopTestCandidates items={testCandidates} />
+
+      <HighRiskPopular items={riskPopular} />
 
       <HotCollections hotCollections={hotCollections} />
 

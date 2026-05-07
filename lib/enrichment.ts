@@ -130,9 +130,10 @@ export async function upsertEnrichedRepos(
         pushed_within_days: pushedDays,
         latest_release_at: e.latest_release_at,
         latest_release_tag: e.latest_release_tag,
-        // Phase 1: contributors_count, commits_30d, prs/issues_30d are deferred to Phase 2 (need separate queries)
-        contributors_count: null,
-        commits_30d: null,
+        // Phase 2: GraphQL fetches commits_30d via history(since:); contributors via mentionableUsers totalCount.
+        contributors_count: e.contributors_count,
+        commits_30d: e.commits_30d,
+        // PR/issue deltas still need separate queries — defer to Phase 3
         prs_open_30d: null,
         prs_merged_30d: null,
         issues_opened_30d: null,

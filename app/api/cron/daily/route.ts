@@ -11,6 +11,7 @@ import {
   type SnapshotRow,
 } from "@/lib/storage";
 import { runEnrichment } from "@/lib/enrichment";
+import { runScoringBatch } from "@/lib/scoring-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,7 +119,21 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Step 3 — score (Phase 2, deferred)
+  // Step 3 — score (Phase 2)
+  if (currentBackend() === "supabase") {
+    const scoreResult = await timed("score", async () => {
+      return await runScoringBatch();
+    });
+    results.push(scoreResult);
+  } else {
+    results.push({
+      step: "score",
+      ok: true,
+      ms: 0,
+      data: { skipped: "file mode — Supabase required" },
+    });
+  }
+
   // Step 4 — AI insight (Phase 4, deferred)
   // Step 5 — pruning (later)
 

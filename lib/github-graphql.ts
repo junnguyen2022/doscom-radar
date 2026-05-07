@@ -29,6 +29,8 @@ export type EnrichedRepo = {
   watchers_count: number | null;
   open_issues_count: number | null;
   contributors_sample: { login: string; avatar_url: string }[];
+  contributors_count: number | null;
+  commits_30d: number | null;
   latest_release_at: string | null;
   latest_release_tag: string | null;
   prs_merged_total: number | null;
@@ -36,7 +38,7 @@ export type EnrichedRepo = {
 };
 
 const REPO_QUERY = `
-  query RepoEnrichment($owner: String!, $name: String!) {
+  query RepoEnrichment($owner: String!, $name: String!, $since: GitTimestamp!) {
     repository(owner: $owner, name: $name) {
       databaseId
       nameWithOwner
@@ -54,7 +56,14 @@ const REPO_QUERY = `
       forkCount
       watchers { totalCount }
       issues(states: OPEN) { totalCount }
-      defaultBranchRef { name }
+      defaultBranchRef {
+        name
+        target {
+          ... on Commit {
+            history(since: $since) { totalCount }
+          }
+        }
+      }
       licenseInfo { key name }
       primaryLanguage { name }
       repositoryTopics(first: 20) {
@@ -64,7 +73,8 @@ const REPO_QUERY = `
         nodes { publishedAt tagName }
       }
       pullRequests(states: MERGED, first: 1) { totalCount }
-      mentionableUsers(first: 5) {
+      mentionableUsers(first: 10) {
+        totalCount
         nodes { login avatarUrl(size: 64) }
       }
     }
@@ -91,13 +101,19 @@ type GraphQLResponse = {
       forkCount: number;
       watchers: { totalCount: number };
       issues: { totalCount: number };
-      defaultBranchRef: { name: string } | null;
+      defaultBranchRef: {
+        name: string;
+        target?: { history?: { totalCount: number } };
+      } | null;
       licenseInfo: { key: string; name: string } | null;
       primaryLanguage: { name: string } | null;
       repositoryTopics: { nodes: { topic: { name: string } }[] };
       releases: { nodes: { publishedAt: string; tagName: string }[] };
       pullRequests: { totalCount: number };
-      mentionableUsers: { nodes: { login: string; avatarUrl: string }[] };
+      mentionableUsers: {
+        totalCount: number;
+        nodes: { login: string; avatarUrl: string }[];
+      };
     } | null;
     rateLimit: {
       remaining: number;
@@ -160,7 +176,12 @@ export async function fetchRepoEnrichment(
   owner: string,
   repo: string,
 ): Promise<EnrichedRepo | null> {
-  const json = await gql<GraphQLResponse>(REPO_QUERY, { owner, name: repo });
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const json = await gql<GraphQLResponse>(REPO_QUERY, {
+    owner,
+    name: repo,
+    since,
+  });
 
   if (!json.data?.repository) return null;
 
@@ -203,6 +224,8 @@ export async function fetchRepoEnrichment(
       login: u.login,
       avatar_url: u.avatarUrl,
     })),
+    contributors_count: r.mentionableUsers.totalCount ?? null,
+    commits_30d: r.defaultBranchRef?.target?.history?.totalCount ?? null,
     latest_release_at: r.releases.nodes[0]?.publishedAt ?? null,
     latest_release_tag: r.releases.nodes[0]?.tagName ?? null,
     prs_merged_total: r.pullRequests.totalCount,
