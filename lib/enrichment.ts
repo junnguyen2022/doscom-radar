@@ -237,7 +237,12 @@ export async function runEnrichment(opts: { cap?: number; delayMs?: number } = {
   metrics: number;
   deltas_updated: number;
   rate_remaining: number | null;
+  has_token: boolean;
+  first_error?: string;
+  sample_failures?: string[];
 }> {
+  const hasToken = !!process.env.GITHUB_TOKEN;
+
   const targets = await selectEnrichmentTargets(opts.cap ?? 200);
   if (targets.length === 0) {
     return {
@@ -247,6 +252,7 @@ export async function runEnrichment(opts: { cap?: number; delayMs?: number } = {
       metrics: 0,
       deltas_updated: 0,
       rate_remaining: null,
+      has_token: hasToken,
     };
   }
 
@@ -254,8 +260,8 @@ export async function runEnrichment(opts: { cap?: number; delayMs?: number } = {
     delayMs: opts.delayMs ?? 100,
   });
 
-  const upsertResult = await upsertEnrichedRepos(ok);
-  const deltasUpdated = await computeStarsDeltas();
+  const upsertResult = ok.length > 0 ? await upsertEnrichedRepos(ok) : { inserted_repos: 0, inserted_metrics: 0 };
+  const deltasUpdated = ok.length > 0 ? await computeStarsDeltas() : 0;
 
   const { getLastRateLimit } = await import("./github-graphql");
   return {
@@ -265,6 +271,9 @@ export async function runEnrichment(opts: { cap?: number; delayMs?: number } = {
     metrics: upsertResult.inserted_metrics,
     deltas_updated: deltasUpdated,
     rate_remaining: getLastRateLimit()?.remaining ?? null,
+    has_token: hasToken,
+    first_error: failed[0]?.error,
+    sample_failures: failed.slice(0, 3).map((f) => `${f.key}: ${f.error}`),
   };
 }
 
