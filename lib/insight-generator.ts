@@ -111,7 +111,7 @@ async function generateOne(repoId: number): Promise<RepoInsight | null> {
 
   const response = await client.messages.create({
     model: INSIGHT_MODEL,
-    max_tokens: 1500,
+    max_tokens: 800, // Cap response size for faster generation (~3-5s vs 8-12s)
     system: [
       {
         type: "text",
