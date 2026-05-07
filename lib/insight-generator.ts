@@ -196,28 +196,33 @@ export async function runInsightBatch(
     return { generated: 0, skipped: 0, failed: 0, cap };
   }
 
+  // Run in parallel — cuts total time from N×call to ~max(call).
+  // Anthropic tier 1 allows 50 RPM, so cap ≤ 10 is safe.
+  const settled = await Promise.allSettled(
+    topScores.map((s) => generateOne(s.repo_id)),
+  );
+
   let generated = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const s of topScores) {
-    try {
-      const result = await generateOne(s.repo_id);
-      if (result === null) {
-        // Either already exists or generation failed
-        const { count } = await supabase
-          .from("repo_insights")
-          .select("id", { count: "exact", head: true })
-          .eq("repo_id", s.repo_id)
-          .eq("insight_date", today);
-        if ((count ?? 0) > 0) skipped++;
-        else failed++;
-      } else {
-        generated++;
-      }
-    } catch (err) {
-      console.error(`Insight repo_id=${s.repo_id} failed:`, err);
+  // Check which ones were skipped (already exist) vs failed
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i];
+    if (r.status === "rejected") {
       failed++;
+      continue;
+    }
+    if (r.value === null) {
+      const { count } = await supabase
+        .from("repo_insights")
+        .select("id", { count: "exact", head: true })
+        .eq("repo_id", topScores[i].repo_id)
+        .eq("insight_date", today);
+      if ((count ?? 0) > 0) skipped++;
+      else failed++;
+    } else {
+      generated++;
     }
   }
 
