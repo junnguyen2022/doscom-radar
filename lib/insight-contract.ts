@@ -142,8 +142,12 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
     evidenceItems = [];
   }
 
-  if (typeof r.risk_note !== "string" || r.risk_note.length < 5) {
-    return { error: "risk_note missing or too short" };
+  // risk_note: prefer present + meaningful, but tolerate missing for non-adopt.
+  const riskNoteRaw = typeof r.risk_note === "string" ? r.risk_note : "";
+  if (rec === "adopt" && riskNoteRaw.length < 5) {
+    return {
+      error: `adopt requires risk_note (got "${riskNoteRaw}")`,
+    };
   }
   if (rec === "adopt" && evidenceItems.length < 2) {
     return {
@@ -184,7 +188,7 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
       typeof r.technical_value === "string" ? r.technical_value : null,
     doscom_use_case:
       typeof r.doscom_use_case === "string" ? r.doscom_use_case : null,
-    risk_note: r.risk_note as string,
+    risk_note: riskNoteRaw || "(no risk note provided)",
     recommendation: rec as Recommendation,
     confidence: conf as Confidence,
     evidence: ev,
