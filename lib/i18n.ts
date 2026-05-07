@@ -13,6 +13,9 @@ export const DICT = {
   nav_collections: { vi: "Collections", en: "Collections" },
   nav_compare: { vi: "So sánh", en: "Compare" },
   nav_languages: { vi: "Ngôn ngữ", en: "Languages" },
+  nav_decisions: { vi: "Decisions", en: "Decisions" },
+  nav_login: { vi: "Đăng nhập", en: "Sign in" },
+  nav_logout: { vi: "Đăng xuất", en: "Sign out" },
 
   // Common
   today: { vi: "Hôm nay", en: "Today" },

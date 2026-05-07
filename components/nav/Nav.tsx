@@ -17,6 +17,9 @@ import {
   Moon,
   Sun,
   Languages,
+  ListChecks,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useApp } from "@/components/providers/AppProvider";
@@ -31,6 +34,7 @@ const ITEMS: { href: string; key: DictKey; icon: LucideIcon }[] = [
   { href: "/radar", key: "nav_radar", icon: Radar },
   { href: "/compare", key: "nav_compare", icon: GitCompare },
   { href: "/watchlist", key: "nav_watchlist", icon: Star },
+  { href: "/decisions", key: "nav_decisions", icon: ListChecks },
   { href: "/digest", key: "nav_digest", icon: FileText },
   { href: "/settings", key: "nav_settings", icon: Settings },
   { href: "/chat", key: "nav_chat", icon: MessageSquare },
@@ -38,7 +42,7 @@ const ITEMS: { href: string; key: DictKey; icon: LucideIcon }[] = [
 
 export function Nav() {
   const pathname = usePathname();
-  const { theme, setTheme, lang, setLang } = useApp();
+  const { theme, setTheme, lang, setLang, user } = useApp();
 
   return (
     <nav className="glass sticky top-0 z-20 border-b border-zinc-200 dark:border-zinc-800">
@@ -79,6 +83,38 @@ export function Nav() {
         </ul>
 
         <div className="ml-auto flex items-center gap-1">
+          {user ? (
+            <form action="/api/auth/signout" method="post" className="inline-flex">
+              <div className="flex items-center gap-2 rounded-md border border-zinc-200 pl-1 pr-1 dark:border-zinc-700">
+                {user.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.avatar_url}
+                    alt={user.github_username ?? "user"}
+                    className="h-5 w-5 rounded-full"
+                  />
+                ) : null}
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  {user.github_username ?? user.email?.split("@")[0]}
+                </span>
+                <button
+                  type="submit"
+                  title="Sign out"
+                  className="inline-flex h-5 w-5 items-center justify-center text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400"
+                >
+                  <LogOut className="h-3 w-3" />
+                </button>
+              </div>
+            </form>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+            >
+              <LogIn className="h-3 w-3" />
+              {t("nav_login", lang)}
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => setLang(lang === "vi" ? "en" : "vi")}

@@ -26,7 +26,9 @@ import {
   type MetricRow,
 } from "@/lib/enrichment";
 import { getLatestScoreForRepo } from "@/lib/scoring-store";
+import { getDecisionHistoryForRepo } from "@/lib/decisions-store";
 import { ScoreBreakdown, type ScoreData } from "@/components/repo/ScoreBreakdown";
+import { DecisionPanel } from "@/components/decisions/DecisionPanel";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { LanguageDot } from "@/components/ui/LanguageDot";
@@ -85,13 +87,16 @@ export default async function RepoDetail({
     getRepository(owner, repo),
   ]);
 
-  // Get latest enriched metrics + score if repo is enriched
-  const [metrics, scoreRow]: [MetricRow | null, Awaited<ReturnType<typeof getLatestScoreForRepo>>] = repository
+  // Get latest enriched metrics + score + decision history (auth-required) if repo is enriched
+  const [metrics, scoreRow, decisionHistory] = repository
     ? await Promise.all([
         getLatestMetrics(repository.id),
         getLatestScoreForRepo(repository.id),
+        getDecisionHistoryForRepo(owner, repo),
       ])
-    : [null, null];
+    : ([null, null, []] as [MetricRow | null, Awaited<ReturnType<typeof getLatestScoreForRepo>>, Awaited<ReturnType<typeof getDecisionHistoryForRepo>>]);
+
+  const currentDecision = decisionHistory[0]?.decision ?? null;
 
   const score: ScoreData | null = scoreRow
     ? {
@@ -444,6 +449,57 @@ export default async function RepoDetail({
       {score && (
         <section id="score" className="mb-8">
           <ScoreBreakdown score={score} />
+        </section>
+      )}
+
+      {/* Decision panel — Phase 3 (auth-required) */}
+      <section id="decision" className="mb-8">
+        <DecisionPanel
+          owner={owner}
+          repo={repo}
+          currentDecision={currentDecision as
+            | "follow"
+            | "review"
+            | "test"
+            | "adopt"
+            | "ignore"
+            | "caution"
+            | null}
+        />
+      </section>
+
+      {/* Decision history (if any) */}
+      {decisionHistory.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+            Decision history ({decisionHistory.length})
+          </h2>
+          <Card className="overflow-hidden">
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {decisionHistory.map((d) => (
+                <li key={d.id} className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <Badge tone="brand" className="capitalize">
+                      {d.decision}
+                    </Badge>
+                    <span className="font-mono text-xs text-zinc-500">
+                      {d.decided_at.slice(0, 10)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {d.decision_reason}
+                  </p>
+                  {(d.test_plan || d.risk_note || d.due_date) && (
+                    <div className="mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      {d.test_plan && <div>📋 Plan: {d.test_plan}</div>}
+                      {d.risk_note && <div>⚠️ Risk: {d.risk_note}</div>}
+                      {d.due_date && <div>📅 Due: {d.due_date}</div>}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
         </section>
       )}
 
