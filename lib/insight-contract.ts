@@ -137,9 +137,12 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
   if (typeof r.risk_note !== "string" || r.risk_note.length < 5) {
     return { error: "risk_note missing or too short" };
   }
-  // For test/adopt — require ≥3 evidence
-  if ((rec === "test" || rec === "adopt") && r.evidence.length < 3) {
-    return { error: `${rec} requires ≥3 evidence items, got ${r.evidence.length}` };
+  // Only enforce strict evidence floor for `adopt`.
+  // Other recommendations get whatever Claude produces — surface count in UI.
+  if (rec === "adopt" && r.evidence.length < 2) {
+    return {
+      error: `adopt requires ≥2 evidence items, got ${r.evidence.length}`,
+    };
   }
 
   // Validate each evidence item
