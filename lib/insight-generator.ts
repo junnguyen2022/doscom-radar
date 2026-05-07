@@ -24,9 +24,24 @@ export type InsightRow = RepoInsight & {
 
 const client = new Anthropic();
 
+type GenerateError = {
+  reason:
+    | "skipped_existing"
+    | "missing_repo"
+    | "missing_metrics"
+    | "missing_score"
+    | "no_tool_use"
+    | "validation"
+    | "db_upsert"
+    | "exception";
+  detail?: string;
+};
+
 // Generate insight for ONE repo using Claude tool-use.
-// Returns null if generation fails or insufficient data.
-async function generateOne(repoId: number): Promise<RepoInsight | null> {
+// Returns insight on success, GenerateError on failure (for diagnostics).
+async function generateOne(
+  repoId: number,
+): Promise<RepoInsight | GenerateError> {
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -37,7 +52,7 @@ async function generateOne(repoId: number): Promise<RepoInsight | null> {
     .eq("repo_id", repoId)
     .eq("insight_date", today)
     .maybeSingle();
-  if (existing) return null;
+  if (existing) return { reason: "skipped_existing" };
 
   // Fetch repo + latest metrics + latest score + snapshot
   const [{ data: repo }, { data: metrics }, { data: score }] = await Promise.all([
@@ -64,7 +79,9 @@ async function generateOne(repoId: number): Promise<RepoInsight | null> {
       .maybeSingle(),
   ]);
 
-  if (!repo || !metrics || !score) return null;
+  if (!repo) return { reason: "missing_repo" };
+  if (!metrics) return { reason: "missing_metrics" };
+  if (!score) return { reason: "missing_score" };
 
   const { data: snapshot } = await supabase
     .from("trending_snapshots")
@@ -127,18 +144,18 @@ async function generateOne(repoId: number): Promise<RepoInsight | null> {
   // Extract tool_use block from response
   const toolUse = response.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
-    console.error(
-      `Insight ${repo.owner}/${repo.repo}: Claude did not use submit_repo_insight tool`,
-    );
-    return null;
+    return {
+      reason: "no_tool_use",
+      detail: `${repo.owner}/${repo.repo}: stop_reason=${response.stop_reason}`,
+    };
   }
 
   const validated = validateInsight(toolUse.input);
   if ("error" in validated) {
-    console.error(
-      `Insight ${repo.owner}/${repo.repo}: validation failed — ${validated.error}`,
-    );
-    return null;
+    return {
+      reason: "validation",
+      detail: `${repo.owner}/${repo.repo}: ${validated.error}`,
+    };
   }
 
   // Store
@@ -160,8 +177,10 @@ async function generateOne(repoId: number): Promise<RepoInsight | null> {
     { onConflict: "repo_id,insight_date" },
   );
   if (error) {
-    console.error(`Insight upsert failed: ${error.message}`);
-    return null;
+    return {
+      reason: "db_upsert",
+      detail: `${repo.owner}/${repo.repo}: ${error.message}`,
+    };
   }
 
   return validated;
@@ -176,6 +195,7 @@ export async function runInsightBatch(
   skipped: number;
   failed: number;
   cap: number;
+  failures?: { reason: string; detail?: string }[];
 }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return { generated: 0, skipped: 0, failed: 0, cap };
@@ -184,7 +204,6 @@ export async function runInsightBatch(
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Pick top by radar_score
   const { data: topScores } = await supabase
     .from("repo_scores")
     .select("repo_id, radar_score, recommendation")
@@ -196,8 +215,7 @@ export async function runInsightBatch(
     return { generated: 0, skipped: 0, failed: 0, cap };
   }
 
-  // Run in parallel — cuts total time from N×call to ~max(call).
-  // Anthropic tier 1 allows 50 RPM, so cap ≤ 10 is safe.
+  // Run in parallel.
   const settled = await Promise.allSettled(
     topScores.map((s) => generateOne(s.repo_id)),
   );
@@ -205,28 +223,37 @@ export async function runInsightBatch(
   let generated = 0;
   let skipped = 0;
   let failed = 0;
+  const failures: { reason: string; detail?: string }[] = [];
 
-  // Check which ones were skipped (already exist) vs failed
-  for (let i = 0; i < settled.length; i++) {
-    const r = settled[i];
+  for (const r of settled) {
     if (r.status === "rejected") {
       failed++;
+      failures.push({
+        reason: "exception",
+        detail: r.reason instanceof Error ? r.reason.message : String(r.reason),
+      });
       continue;
     }
-    if (r.value === null) {
-      const { count } = await supabase
-        .from("repo_insights")
-        .select("id", { count: "exact", head: true })
-        .eq("repo_id", topScores[i].repo_id)
-        .eq("insight_date", today);
-      if ((count ?? 0) > 0) skipped++;
-      else failed++;
+    const v = r.value;
+    if ("reason" in v) {
+      if (v.reason === "skipped_existing") {
+        skipped++;
+      } else {
+        failed++;
+        failures.push({ reason: v.reason, detail: v.detail });
+      }
     } else {
       generated++;
     }
   }
 
-  return { generated, skipped, failed, cap };
+  return {
+    generated,
+    skipped,
+    failed,
+    cap,
+    failures: failures.length > 0 ? failures : undefined,
+  };
 }
 
 // Read latest insight for a single repo
