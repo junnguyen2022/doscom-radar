@@ -131,35 +131,41 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
   if (typeof conf !== "string" || !["high", "medium", "low"].includes(conf)) {
     return { error: "invalid confidence" };
   }
-  if (!Array.isArray(r.evidence)) {
-    return { error: "evidence must be an array" };
+  // Coerce evidence to array — Claude sometimes returns null/object/undefined
+  // despite tool schema declaring type:array.
+  let evidenceItems: unknown[];
+  if (Array.isArray(r.evidence)) {
+    evidenceItems = r.evidence;
+  } else if (r.evidence && typeof r.evidence === "object") {
+    evidenceItems = Object.values(r.evidence);
+  } else {
+    evidenceItems = [];
   }
+
   if (typeof r.risk_note !== "string" || r.risk_note.length < 5) {
     return { error: "risk_note missing or too short" };
   }
-  // Only enforce strict evidence floor for `adopt`.
-  // Other recommendations get whatever Claude produces — surface count in UI.
-  if (rec === "adopt" && r.evidence.length < 2) {
+  if (rec === "adopt" && evidenceItems.length < 2) {
     return {
-      error: `adopt requires ≥2 evidence items, got ${r.evidence.length}`,
+      error: `adopt requires ≥2 evidence items, got ${evidenceItems.length}`,
     };
   }
 
-  // Validate each evidence item
+  // Validate each evidence item — be lenient, skip invalid ones
   const ev: EvidenceItem[] = [];
-  for (const item of r.evidence) {
+  for (const item of evidenceItems) {
     if (
       typeof item !== "object" ||
       !item ||
       typeof (item as Record<string, unknown>).label !== "string" ||
       typeof (item as Record<string, unknown>).reason !== "string"
     ) {
-      return { error: "invalid evidence item shape" };
+      // Skip invalid items rather than fail whole insight
+      continue;
     }
     const e = item as Record<string, unknown>;
     ev.push({
-      type:
-        (e.type as EvidenceItem["type"]) ?? "metric",
+      type: (e.type as EvidenceItem["type"]) ?? "metric",
       label: e.label as string,
       value:
         typeof e.value === "string" ||
