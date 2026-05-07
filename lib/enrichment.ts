@@ -294,6 +294,7 @@ export type RepositoryRow = {
   fork: boolean;
   pushed_at: string | null;
   last_enriched_at: string | null;
+  raw: unknown;
 };
 
 export async function getRepository(
@@ -304,7 +305,7 @@ export async function getRepository(
   const { data } = await supabase
     .from("repositories")
     .select(
-      "id, owner, repo, description, language, topics, license_key, license_name, archived, fork, pushed_at, last_enriched_at",
+      "id, owner, repo, description, language, topics, license_key, license_name, archived, fork, pushed_at, last_enriched_at, raw",
     )
     .eq("owner", owner)
     .eq("repo", repo)

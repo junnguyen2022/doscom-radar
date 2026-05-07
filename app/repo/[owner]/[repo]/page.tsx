@@ -5,15 +5,26 @@ import {
   Flame,
   Star,
   TrendingUp,
-  Activity,
   Award,
   FolderKanban,
   Clock,
+  GitFork,
+  AlertCircle,
+  Scale,
+  Tag,
+  Users,
+  Calendar,
+  FolderOpen,
 } from "lucide-react";
 import { historyForRepo } from "@/lib/storage";
 import { computeHeat } from "@/lib/heat";
 import { classify, CLASS_LABEL, type Classification } from "@/lib/classify";
 import { collectionsForRepo } from "@/lib/collections";
+import {
+  getRepository,
+  getLatestMetrics,
+  type MetricRow,
+} from "@/lib/enrichment";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { LanguageDot } from "@/components/ui/LanguageDot";
@@ -25,7 +36,6 @@ import {
 } from "@/components/repo/StarsHistoryChart";
 import { SocialShare } from "@/components/repo/SocialShare";
 import { WatchButton } from "@/components/watchlist/WatchButton";
-import { FolderOpen } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -35,19 +45,55 @@ const CLASS_TONE: Record<Classification, "success" | "warning" | "danger"> = {
   caution: "danger",
 };
 
+type Contributor = { login: string; avatar_url: string };
+
+function getContributorsFromRaw(raw: unknown): Contributor[] {
+  if (!raw || typeof raw !== "object") return [];
+  const r = raw as Record<string, unknown>;
+  const mu = r.mentionableUsers as { nodes?: Contributor[] } | undefined;
+  return (mu?.nodes ?? []).slice(0, 5);
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(ms / 86400000);
+  if (days < 1) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months === 1) return "1 month ago";
+  if (months < 12) return `${months} months ago`;
+  const years = Math.floor(days / 365);
+  return years === 1 ? "1 year ago" : `${years} years ago`;
+}
+
 export default async function RepoDetail({
   params,
 }: {
   params: Promise<{ owner: string; repo: string }>;
 }) {
   const { owner, repo } = await params;
-  const [daily, weekly, monthly] = await Promise.all([
+
+  // Fetch all in parallel
+  const [daily, weekly, monthly, repository] = await Promise.all([
     historyForRepo(owner, repo, "daily"),
     historyForRepo(owner, repo, "weekly"),
     historyForRepo(owner, repo, "monthly"),
+    getRepository(owner, repo),
   ]);
 
-  if (daily.length === 0 && weekly.length === 0 && monthly.length === 0) {
+  // Get latest enriched metrics if repo is enriched
+  const metrics: MetricRow | null = repository
+    ? await getLatestMetrics(repository.id)
+    : null;
+
+  if (
+    daily.length === 0 &&
+    weekly.length === 0 &&
+    monthly.length === 0 &&
+    !repository
+  ) {
     return (
       <main>
         <Link
@@ -82,21 +128,30 @@ export default async function RepoDetail({
     );
   }
 
-  const latest = daily.at(-1) ?? weekly.at(-1) ?? monthly.at(-1)!;
+  const latest = daily.at(-1) ?? weekly.at(-1) ?? monthly.at(-1) ?? null;
+
+  // Prefer enriched data when available, fall back to snapshot
+  const totalStars = metrics?.total_stars ?? latest?.total_stars ?? null;
+  const language = repository?.language ?? latest?.language ?? null;
+  const description = repository?.description ?? latest?.description ?? null;
+  const url = latest?.url ?? `https://github.com/${owner}/${repo}`;
+
   const heat = computeHeat({
-    starsGained: latest.stars_gained,
-    totalStars: latest.total_stars,
-    rank: latest.rank,
+    starsGained: latest?.stars_gained ?? null,
+    totalStars,
+    rank: latest?.rank ?? 25,
   });
   const cls = classify({
-    starsGained: latest.stars_gained,
-    totalStars: latest.total_stars,
-    language: latest.language,
+    starsGained: latest?.stars_gained ?? null,
+    totalStars,
+    language,
   });
 
   const collections = collectionsForRepo(owner, repo);
+  const contributors = getContributorsFromRaw(repository?.raw ?? null);
+  const topics: string[] = repository?.topics ?? [];
 
-  // Stars chart data — use daily snapshots (most granular)
+  // Stars chart data — combine snapshot stars + enriched metrics
   const starsHistory = daily
     .filter((s) => s.total_stars != null)
     .map((s) => ({ date: s.captured_at, value: s.total_stars! }));
@@ -106,7 +161,10 @@ export default async function RepoDetail({
     value: s.rank,
   }));
 
-  const peakRank = daily.length > 0 ? Math.min(...daily.map((s) => s.rank)) : null;
+  const peakRank =
+    daily.length > 0 ? Math.min(...daily.map((s) => s.rank)) : null;
+
+  const enrichedAt = repository?.last_enriched_at;
 
   return (
     <main>
@@ -118,15 +176,37 @@ export default async function RepoDetail({
         Trending
       </Link>
 
-      {/* Hero — OSSInsight-style */}
+      {/* Hero */}
       <section className="relative -mx-4 mt-3 mb-8 overflow-hidden border-b border-zinc-200 bg-gradient-to-br from-zinc-50 via-white to-brand-50/40 px-4 py-8 dark:border-zinc-800 dark:from-zinc-900/50 dark:via-zinc-950 dark:to-brand-950/20 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="absolute inset-0 bg-grid opacity-30" />
         <div className="absolute -right-20 top-0 h-64 w-64 rounded-full bg-brand-500/10 blur-3xl" />
 
         <div className="relative mx-auto max-w-7xl">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
-            Repository Analytics
-          </p>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+              Repository Analytics
+            </p>
+            {enrichedAt ? (
+              <Badge tone="success" className="text-[10px]">
+                ✓ Enriched {relativeTime(enrichedAt)}
+              </Badge>
+            ) : (
+              <Badge tone="neutral" className="text-[10px]">
+                snapshot data only
+              </Badge>
+            )}
+            {repository?.archived && (
+              <Badge tone="danger" className="text-[10px]">
+                ARCHIVED
+              </Badge>
+            )}
+            {repository?.fork && (
+              <Badge tone="warning" className="text-[10px]">
+                FORK
+              </Badge>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="flex flex-wrap items-center gap-2 text-3xl font-bold tracking-tight sm:text-4xl">
@@ -136,7 +216,7 @@ export default async function RepoDetail({
                   {repo}
                 </span>
                 <a
-                  href={latest.url}
+                  href={url}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
@@ -152,31 +232,102 @@ export default async function RepoDetail({
                 />
               </h1>
 
-              {latest.description && (
+              {description && (
                 <p className="mt-2 max-w-3xl text-base text-zinc-600 dark:text-zinc-400">
-                  {latest.description}
+                  {description}
                 </p>
               )}
 
+              {/* Meta badges row */}
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                 <Badge tone={CLASS_TONE[cls]}>{CLASS_LABEL[cls].vi}</Badge>
-                {latest.language && (
+                {language && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                    <LanguageDot language={latest.language} />
-                    {latest.language}
+                    <LanguageDot language={language} />
+                    {language}
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
                   <Flame className="h-3 w-3" />
                   Heat {heat}
                 </span>
-                {latest.total_stars != null && (
-                  <span className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
-                    <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                    {latest.total_stars.toLocaleString()} total
+                {repository?.license_name && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                    title={`License: ${repository.license_name}`}
+                  >
+                    <Scale className="h-3 w-3" />
+                    {repository.license_key?.toUpperCase() ?? "license"}
+                  </span>
+                )}
+                {repository?.pushed_at && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    title={`Last push: ${repository.pushed_at}`}
+                  >
+                    <Calendar className="h-3 w-3" />
+                    pushed {relativeTime(repository.pushed_at)}
+                  </span>
+                )}
+                {metrics?.latest_release_tag && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    title={`Released ${relativeTime(metrics.latest_release_at)}`}
+                  >
+                    <Tag className="h-3 w-3" />
+                    {metrics.latest_release_tag}
                   </span>
                 )}
               </div>
+
+              {/* Topics chips */}
+              {topics.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    Topics:
+                  </span>
+                  {topics.slice(0, 12).map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-blue-100 dark:bg-blue-950/30 dark:text-blue-300 dark:ring-blue-900/40"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Contributors row */}
+              {contributors.length > 0 && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5 text-zinc-500" />
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Top contributors:
+                  </span>
+                  <div className="flex -space-x-1.5">
+                    {contributors.map((c) => (
+                      <a
+                        key={c.login}
+                        href={`https://github.com/${c.login}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={c.login}
+                        className="block"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={c.avatar_url}
+                          alt={c.login}
+                          width={24}
+                          height={24}
+                          className="h-6 w-6 rounded-full ring-2 ring-white dark:ring-zinc-900"
+                          loading="lazy"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <SocialShare
@@ -187,35 +338,41 @@ export default async function RepoDetail({
         </div>
       </section>
 
-      {/* Stat cards row */}
-      <section className="mb-8 grid gap-3 grid-cols-2 md:grid-cols-5">
+      {/* Stat cards — extended with forks + open issues */}
+      <section className="mb-8 grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <StatCard
           label="Current rank"
-          value={`#${latest.rank}`}
+          value={latest?.rank ? `#${latest.rank}` : "—"}
           accent="brand"
           icon={TrendingUp}
-          hint={latest.captured_at}
+          hint={latest?.captured_at}
         />
         <StatCard
           label="Total stars"
+          value={totalStars != null ? totalStars.toLocaleString() : "—"}
+          icon={Star}
+          hint={metrics ? "Live (enriched)" : "From snapshot"}
+        />
+        <StatCard
+          label="Forks"
           value={
-            latest.total_stars != null
-              ? latest.total_stars.toLocaleString()
+            metrics?.forks_count != null
+              ? metrics.forks_count.toLocaleString()
               : "—"
           }
-          icon={Star}
+          icon={GitFork}
           hint="GitHub total"
         />
         <StatCard
-          label="Stars today"
+          label="Open issues"
           value={
-            latest.stars_gained != null
-              ? `+${latest.stars_gained.toLocaleString()}`
+            metrics?.open_issues_count != null
+              ? metrics.open_issues_count.toLocaleString()
               : "—"
           }
-          accent="emerald"
-          icon={Activity}
-          hint="Latest snapshot"
+          accent="amber"
+          icon={AlertCircle}
+          hint="Currently open"
         />
         <StatCard
           label="Heat score"
@@ -229,7 +386,7 @@ export default async function RepoDetail({
           value={peakRank != null ? `#${peakRank}` : "—"}
           accent="rose"
           icon={Award}
-          hint={`Across ${daily.length} snapshots`}
+          hint={`${daily.length} snapshots`}
         />
       </section>
 
@@ -240,12 +397,6 @@ export default async function RepoDetail({
           className="border-b-2 border-brand-600 px-4 py-2.5 text-sm font-medium text-brand-700 dark:border-brand-400 dark:text-brand-400"
         >
           Overview
-        </a>
-        <a
-          href="#history"
-          className="border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-        >
-          History
         </a>
         <a
           href="#collections"
@@ -317,7 +468,8 @@ export default async function RepoDetail({
         </h2>
         {collections.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400">
-            Repo này chưa thuộc collection nào trong 138 collections của OSSInsight.
+            Repo này chưa thuộc collection nào trong 138 collections của
+            OSSInsight.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -407,7 +559,15 @@ export default async function RepoDetail({
       </section>
 
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        💡 Layout cảm hứng từ <a href="https://ossinsight.io" className="text-brand-600 hover:underline dark:text-brand-400">OSSInsight.io</a>. Một số metrics của họ (commits, contributors, geo, PR/issue analytics) cần GH Archive event stream — ta chỉ có trending snapshots.
+        💡 Layout cảm hứng từ{" "}
+        <a
+          href="https://ossinsight.io"
+          className="text-brand-600 hover:underline dark:text-brand-400"
+        >
+          OSSInsight.io
+        </a>
+        . Enriched data từ GitHub GraphQL API. Snapshot data từ
+        github.com/trending scraper.
       </p>
     </main>
   );
