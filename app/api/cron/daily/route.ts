@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
   // Skip if file mode (enrichment requires Supabase tables)
   if (currentBackend() === "supabase") {
     const enrichResult = await timed("enrich", async () => {
-      return await runEnrichment({ cap: 100, delayMs: 80 });
+      return await runEnrichment({ cap: 50, delayMs: 50 });
     });
     results.push(enrichResult);
   } else {

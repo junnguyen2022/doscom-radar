@@ -88,7 +88,8 @@ export async function scoreOneRepo(
   });
 }
 
-// Batch: score all enriched repos for today, upsert into repo_scores.
+// Batch: bulk-load + compute in memory + single upsert.
+// Optimized for Vercel 60s limit: 3 SELECT + 1 UPSERT instead of 3*N + N.
 export async function runScoringBatch(): Promise<{
   scored: number;
   failed: number;
@@ -97,29 +98,76 @@ export async function runScoringBatch(): Promise<{
   const supabase = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Pick all repos that were enriched (have a metric row for today)
-  const { data: enrichedRepoIds } = await supabase
-    .from("repo_metrics_daily")
-    .select("repo_id")
-    .eq("metric_date", today);
+  const [{ data: metricsToday }, { data: snapshotsToday }] = await Promise.all([
+    supabase.from("repo_metrics_daily").select("*").eq("metric_date", today),
+    supabase
+      .from("trending_snapshots")
+      .select("owner, repo, rank, stars_gained")
+      .eq("captured_at", today)
+      .eq("timeframe", "daily"),
+  ]);
 
-  const ids = Array.from(new Set((enrichedRepoIds ?? []).map((r) => r.repo_id)));
-  if (ids.length === 0) {
+  if (!metricsToday || metricsToday.length === 0) {
     return { scored: 0, failed: 0, recommendation_counts: {} };
   }
 
-  let scored = 0;
+  const repoIds = Array.from(new Set(metricsToday.map((m) => m.repo_id)));
+  const { data: repos } = await supabase
+    .from("repositories")
+    .select(
+      "id, owner, repo, language, description, topics, license_key, archived, disabled, fork, pushed_at",
+    )
+    .in("id", repoIds);
+
+  const repoMap = new Map((repos ?? []).map((r) => [r.id, r]));
+  const metricMap = new Map(metricsToday.map((m) => [m.repo_id, m]));
+  const snapMap = new Map(
+    (snapshotsToday ?? []).map((s) => [`${s.owner}/${s.repo}`.toLowerCase(), s]),
+  );
+
   let failed = 0;
   const counts: Record<string, number> = {};
+  const rowsToUpsert: Array<RepoScoreRow> = [];
 
-  for (const id of ids) {
+  for (const id of repoIds) {
     try {
-      const result = await scoreOneRepo(id);
-      if (!result) {
+      const repo = repoMap.get(id);
+      const metrics = metricMap.get(id);
+      if (!repo || !metrics) {
         failed++;
         continue;
       }
-      const row: Omit<RepoScoreRow, "score_date"> & { score_date: string } = {
+      const snap = snapMap.get(`${repo.owner}/${repo.repo}`.toLowerCase());
+      const collections = collectionsForRepo(repo.owner, repo.repo);
+
+      const result = computeAllScores({
+        rank: snap?.rank,
+        stars_gained_today: snap?.stars_gained ?? null,
+        total_stars: metrics.total_stars,
+        archived: repo.archived,
+        disabled: repo.disabled,
+        fork: repo.fork,
+        language: repo.language,
+        description: repo.description,
+        topics: repo.topics ?? [],
+        license_key: repo.license_key,
+        pushed_at: repo.pushed_at,
+        collectionSlugs: collections.map((c) => c.slug),
+        contributors_count: metrics.contributors_count,
+        commits_30d: metrics.commits_30d,
+        prs_open_30d: metrics.prs_open_30d,
+        prs_merged_30d: metrics.prs_merged_30d,
+        issues_opened_30d: metrics.issues_opened_30d,
+        issues_closed_30d: metrics.issues_closed_30d,
+        stars_delta_1d: metrics.stars_delta_1d,
+        stars_delta_7d: metrics.stars_delta_7d,
+        stars_delta_30d: metrics.stars_delta_30d,
+        forks_delta_7d: metrics.forks_delta_7d,
+        pushed_within_days: metrics.pushed_within_days,
+        latest_release_at: metrics.latest_release_at,
+      });
+
+      rowsToUpsert.push({
         repo_id: id,
         score_date: today,
         heat_score: result.heat_score,
@@ -135,22 +183,32 @@ export async function runScoringBatch(): Promise<{
         risk_flags: result.risk_flags,
         relevance_tier: result.relevance_tier,
         score_reason: result.score_reason,
-      };
-
-      const { error } = await supabase
-        .from("repo_scores")
-        .upsert(row, { onConflict: "repo_id,score_date" });
-      if (error) throw new Error(error.message);
-
+      });
       counts[result.recommendation] = (counts[result.recommendation] ?? 0) + 1;
-      scored++;
     } catch (err) {
       failed++;
       console.error(`score repo_id=${id} failed:`, err);
     }
   }
 
-  return { scored, failed, recommendation_counts: counts };
+  if (rowsToUpsert.length > 0) {
+    const { error } = await supabase
+      .from("repo_scores")
+      .upsert(rowsToUpsert, { onConflict: "repo_id,score_date" });
+    if (error) {
+      return {
+        scored: 0,
+        failed: rowsToUpsert.length,
+        recommendation_counts: {},
+      };
+    }
+  }
+
+  return {
+    scored: rowsToUpsert.length,
+    failed,
+    recommendation_counts: counts,
+  };
 }
 
 // Read helpers for UI
