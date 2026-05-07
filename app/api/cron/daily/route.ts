@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
   const elapsedBeforeInsight = Date.now() - start;
   if (currentBackend() === "supabase" && elapsedBeforeInsight < 45000) {
     const insightResult = await timed("insight", async () => {
-      return await runInsightBatch(2);
+      return await runInsightBatch(1);
     });
     results.push(insightResult);
   } else {
