@@ -12,6 +12,7 @@ import {
 } from "@/lib/storage";
 import { runEnrichment } from "@/lib/enrichment";
 import { runScoringBatch } from "@/lib/scoring-store";
+import { runInsightBatch } from "@/lib/insight-generator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,10 +105,10 @@ export async function GET(req: NextRequest) {
   }
 
   // Step 2 — enrich top repos via GraphQL (~25s)
-  // Skip if file mode (enrichment requires Supabase tables)
+  // Cap reduced from 50 → 30 to leave headroom for AI insight step.
   if (currentBackend() === "supabase") {
     const enrichResult = await timed("enrich", async () => {
-      return await runEnrichment({ cap: 50, delayMs: 50 });
+      return await runEnrichment({ cap: 30, delayMs: 50 });
     });
     results.push(enrichResult);
   } else {
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Step 3 — score (Phase 2)
+  // Step 3 — score (Phase 2, fast: ~1s)
   if (currentBackend() === "supabase") {
     const scoreResult = await timed("score", async () => {
       return await runScoringBatch();
@@ -134,7 +135,28 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Step 4 — AI insight (Phase 4, deferred)
+  // Step 4 — AI insights (Phase 4) — top 5 by radar_score
+  // Skip if elapsed > 45s to avoid 60s function timeout.
+  const elapsedBeforeInsight = Date.now() - start;
+  if (currentBackend() === "supabase" && elapsedBeforeInsight < 45000) {
+    const insightResult = await timed("insight", async () => {
+      return await runInsightBatch(5);
+    });
+    results.push(insightResult);
+  } else {
+    results.push({
+      step: "insight",
+      ok: true,
+      ms: 0,
+      data: {
+        skipped:
+          currentBackend() !== "supabase"
+            ? "file mode"
+            : `time guard (elapsed ${elapsedBeforeInsight}ms)`,
+      },
+    });
+  }
+
   // Step 5 — pruning (later)
 
   const allOk = results.every((r) => r.ok);

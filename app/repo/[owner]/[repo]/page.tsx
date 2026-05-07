@@ -27,8 +27,10 @@ import {
 } from "@/lib/enrichment";
 import { getLatestScoreForRepo } from "@/lib/scoring-store";
 import { getDecisionHistoryForRepo } from "@/lib/decisions-store";
+import { getLatestInsight } from "@/lib/insight-generator";
 import { ScoreBreakdown, type ScoreData } from "@/components/repo/ScoreBreakdown";
 import { DecisionPanel } from "@/components/decisions/DecisionPanel";
+import { InsightCard, type InsightCardData } from "@/components/repo/InsightCard";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { LanguageDot } from "@/components/ui/LanguageDot";
@@ -87,16 +89,38 @@ export default async function RepoDetail({
     getRepository(owner, repo),
   ]);
 
-  // Get latest enriched metrics + score + decision history (auth-required) if repo is enriched
-  const [metrics, scoreRow, decisionHistory] = repository
+  // Get latest enriched metrics + score + decision history + AI insight if repo is enriched
+  const [metrics, scoreRow, decisionHistory, insightRow] = repository
     ? await Promise.all([
         getLatestMetrics(repository.id),
         getLatestScoreForRepo(repository.id),
         getDecisionHistoryForRepo(owner, repo),
+        getLatestInsight(repository.id),
       ])
-    : ([null, null, []] as [MetricRow | null, Awaited<ReturnType<typeof getLatestScoreForRepo>>, Awaited<ReturnType<typeof getDecisionHistoryForRepo>>]);
+    : ([null, null, [], null] as [
+        MetricRow | null,
+        Awaited<ReturnType<typeof getLatestScoreForRepo>>,
+        Awaited<ReturnType<typeof getDecisionHistoryForRepo>>,
+        Awaited<ReturnType<typeof getLatestInsight>>,
+      ]);
 
   const currentDecision = decisionHistory[0]?.decision ?? null;
+
+  const insight: InsightCardData | null = insightRow
+    ? {
+        insight_date: insightRow.insight_date,
+        summary: insightRow.summary,
+        why_trending: insightRow.why_trending,
+        technical_value: insightRow.technical_value,
+        doscom_use_case: insightRow.doscom_use_case,
+        risk_note: insightRow.risk_note,
+        recommendation: insightRow.recommendation,
+        confidence: insightRow.confidence,
+        evidence: insightRow.evidence,
+        model: insightRow.model,
+        generated_at: insightRow.generated_at,
+      }
+    : null;
 
   const score: ScoreData | null = scoreRow
     ? {
@@ -444,6 +468,13 @@ export default async function RepoDetail({
           Snapshots
         </a>
       </nav>
+
+      {/* AI Insight — Phase 4 */}
+      {insight && (
+        <section id="insight" className="mb-8">
+          <InsightCard insight={insight} />
+        </section>
+      )}
 
       {/* Score breakdown — Phase 2 */}
       {score && (
