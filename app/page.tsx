@@ -76,6 +76,8 @@ function rowsToTableRows(
 }
 
 export default async function Home() {
+  // Single parallel wave — all 8 reads share Supabase pool + unstable_cache
+  // wrappers, so this fans out and resolves together.
   const [
     { rows: daily, capturedAt },
     { rows: weekly },
@@ -83,6 +85,8 @@ export default async function Home() {
     info,
     dates,
     history,
+    testCandidates,
+    riskPopular,
   ] = await Promise.all([
     allRowsForLatestDate("daily"),
     allRowsForLatestDate("weekly"),
@@ -90,10 +94,6 @@ export default async function Home() {
     lastSnapshotInfo(),
     distinctDailyDates(),
     snapshotCountsByDate("daily", 14),
-  ]);
-
-  // Phase 2 — scoring sections
-  const [testCandidates, riskPopular] = await Promise.all([
     getTopByRecommendation("test", 6).catch(() => []),
     getHighRiskPopular(4).catch(() => []),
   ]);
@@ -130,11 +130,14 @@ export default async function Home() {
     moversPreview = computeMovers(today, yesterday);
   }
 
-  // Combine all rows for trending table (with timeframe label)
+  // Combine top 25 per timeframe (TrendingTable shows top 20 + small filter
+  // buffer). Pre-slicing on the server keeps the client payload ~60 rows
+  // instead of ~450.
+  const TABLE_PER_TIMEFRAME = 25;
   const tableRows: TrendingTableRow[] = [
-    ...rowsToTableRows(daily, "daily"),
-    ...rowsToTableRows(weekly, "weekly"),
-    ...rowsToTableRows(monthly, "monthly"),
+    ...rowsToTableRows(daily.slice(0, TABLE_PER_TIMEFRAME), "daily"),
+    ...rowsToTableRows(weekly.slice(0, TABLE_PER_TIMEFRAME), "weekly"),
+    ...rowsToTableRows(monthly.slice(0, TABLE_PER_TIMEFRAME), "monthly"),
   ];
 
   return (

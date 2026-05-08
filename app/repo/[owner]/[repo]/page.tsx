@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   ArrowLeft,
   ExternalLink,
@@ -70,6 +71,133 @@ function getContributorsFromRaw(raw: unknown): Contributor[] {
   return (mu?.nodes ?? []).slice(0, 5);
 }
 
+// Streamed below-fold blocks — perf pass.
+// README + Similar both add 200-500ms each on cold cache and aren't critical
+// for above-the-fold paint. Wrapping them in Suspense lets the page shell,
+// hero, score, AI insight, and decision panel paint immediately while these
+// fetch in parallel and stream in.
+async function ProfileBlock({
+  owner,
+  repo,
+  repository,
+  score,
+}: {
+  owner: string;
+  repo: string;
+  repository: Awaited<ReturnType<typeof getRepository>>;
+  score: ScoreData | null;
+}) {
+  const readmeRaw = await fetchReadme(owner, repo);
+  const readmeProfile: ReadmeProfile | null = readmeRaw
+    ? extractReadmeProfile(readmeRaw.content)
+    : null;
+  const doscomMatches = mapDoscomUseCases({
+    topics: repository?.topics ?? [],
+    language: repository?.language ?? null,
+    description: repository?.description ?? null,
+    readmeOverview: readmeProfile?.overview,
+    readmeFeatures: readmeProfile?.keyFeatures,
+  });
+
+  return (
+    <>
+      <section id="recommendation" className="mb-8">
+        <RecommendationCard
+          data={buildRecommendation({
+            radar: score?.radar_score ?? null,
+            risk: score?.risk_penalty ?? null,
+            relevance: score?.relevance_score ?? null,
+            maintenance: score?.maintenance_score ?? null,
+            doscomMatches,
+            readmeConfidence: readmeProfile?.confidence ?? "low",
+            readmeMissingData: readmeProfile?.missingData ?? ["readme"],
+            language: repository?.language ?? null,
+            archived: repository?.archived ?? false,
+            hasLicense: !!repository?.license_key,
+          })}
+        />
+      </section>
+      <section id="profile" className="mb-8">
+        <RepoIntelligenceProfile
+          profile={readmeProfile}
+          doscomMatches={doscomMatches}
+          fetched={!!readmeRaw}
+        />
+      </section>
+    </>
+  );
+}
+
+async function SimilarReposBlock({
+  owner,
+  repo,
+  repository,
+}: {
+  owner: string;
+  repo: string;
+  repository: Awaited<ReturnType<typeof getRepository>>;
+}) {
+  if (!repository) {
+    return (
+      <section id="similar" className="mb-8">
+        <SimilarRepos source={{ owner, repo }} similar={[]} />
+      </section>
+    );
+  }
+  const similar = await getSimilarRepos(owner, repo, {
+    topics: repository.topics ?? [],
+    language: repository.language,
+    limit: 6,
+  });
+  return (
+    <section id="similar" className="mb-8">
+      <SimilarRepos source={{ owner, repo }} similar={similar} />
+    </section>
+  );
+}
+
+function ProfileBlockFallback() {
+  return (
+    <>
+      <section className="mb-8">
+        <Card className="p-5">
+          <div className="space-y-2">
+            <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-3 w-1/2 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+          </div>
+        </Card>
+      </section>
+      <section className="mb-8">
+        <Card className="p-5">
+          <div className="space-y-2">
+            <div className="h-3 w-1/4 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-3 w-full animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-3 w-5/6 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+          </div>
+        </Card>
+      </section>
+    </>
+  );
+}
+
+function SimilarBlockFallback() {
+  return (
+    <section className="mb-8">
+      <Card className="p-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-24 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800/40"
+            />
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
   const ms = Date.now() - new Date(iso).getTime();
@@ -91,7 +219,7 @@ export default async function RepoDetail({
 }) {
   const { owner, repo } = await params;
 
-  // Fetch all in parallel
+  // Wave 1 — required for above-the-fold render.
   const [daily, weekly, monthly, repository] = await Promise.all([
     historyForRepo(owner, repo, "daily"),
     historyForRepo(owner, repo, "weekly"),
@@ -99,7 +227,8 @@ export default async function RepoDetail({
     getRepository(owner, repo),
   ]);
 
-  // Get latest enriched metrics + score + decision history + AI insight if repo is enriched
+  // Wave 2 — enriched metrics + score + decisions + insight (depends on repository.id).
+  // README + similar repos are streamed via Suspense below the fold.
   const [metrics, scoreRow, decisionHistory, insightRow] = repository
     ? await Promise.all([
         getLatestMetrics(repository.id),
@@ -113,26 +242,6 @@ export default async function RepoDetail({
         Awaited<ReturnType<typeof getDecisionHistoryForRepo>>,
         Awaited<ReturnType<typeof getLatestInsight>>,
       ]);
-
-  // V2.5: README profile + Doscom mapping + similar repos.
-  const readmeRaw = await fetchReadme(owner, repo);
-  const readmeProfile: ReadmeProfile | null = readmeRaw
-    ? extractReadmeProfile(readmeRaw.content)
-    : null;
-  const doscomMatches = mapDoscomUseCases({
-    topics: repository?.topics ?? [],
-    language: repository?.language ?? null,
-    description: repository?.description ?? null,
-    readmeOverview: readmeProfile?.overview,
-    readmeFeatures: readmeProfile?.keyFeatures,
-  });
-  const similar = repository
-    ? await getSimilarRepos(owner, repo, {
-        topics: repository.topics ?? [],
-        language: repository.language,
-        limit: 6,
-      })
-    : [];
 
   const currentDecision = decisionHistory[0]?.decision ?? null;
 
@@ -513,37 +622,20 @@ export default async function RepoDetail({
         </section>
       )}
 
-      {/* V2.5 — Recommendation Card (rule-based) */}
-      <section id="recommendation" className="mb-8">
-        <RecommendationCard
-          data={buildRecommendation({
-            radar: score?.radar_score ?? null,
-            risk: score?.risk_penalty ?? null,
-            relevance: score?.relevance_score ?? null,
-            maintenance: score?.maintenance_score ?? null,
-            doscomMatches,
-            readmeConfidence: readmeProfile?.confidence ?? "low",
-            readmeMissingData: readmeProfile?.missingData ?? ["readme"],
-            language: language,
-            archived: repository?.archived ?? false,
-            hasLicense: !!repository?.license_key,
-          })}
+      {/* V2.5 — Recommendation Card + Profile (streamed; README is the slow leg) */}
+      <Suspense fallback={<ProfileBlockFallback />}>
+        <ProfileBlock
+          owner={owner}
+          repo={repo}
+          repository={repository}
+          score={score}
         />
-      </section>
+      </Suspense>
 
-      {/* V2.5 — Repo Intelligence Profile (README-derived) */}
-      <section id="profile" className="mb-8">
-        <RepoIntelligenceProfile
-          profile={readmeProfile}
-          doscomMatches={doscomMatches}
-          fetched={!!readmeRaw}
-        />
-      </section>
-
-      {/* V2.5 — Similar / Alternative repos */}
-      <section id="similar" className="mb-8">
-        <SimilarRepos source={{ owner, repo }} similar={similar} />
-      </section>
+      {/* V2.5 — Similar / Alternative repos (streamed; below the fold) */}
+      <Suspense fallback={<SimilarBlockFallback />}>
+        <SimilarReposBlock owner={owner} repo={repo} repository={repository} />
+      </Suspense>
 
       {/* Decision panel — Phase 3 (auth-required) */}
       <section id="decision" className="mb-8">

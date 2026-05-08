@@ -3,6 +3,10 @@
 // writes to repo_scores.
 
 import { createAdminClient } from "./supabase/admin";
+import { unstable_cache } from "next/cache";
+
+const SCORE_CACHE_TTL = 60 * 15; // 15 min — scoring runs daily via cron
+const SCORE_CACHE_TAG = "scores";
 import { collectionsForRepo } from "./collections";
 import { computeAllScores, type ScoringResult } from "./scoring";
 
@@ -234,7 +238,7 @@ export type ScoredRepoSummary = {
   relevance_tier: string;
 };
 
-export async function getLatestScoreForRepo(
+async function _getLatestScoreForRepoInner(
   repoId: number,
 ): Promise<RepoScoreRow | null> {
   const supabase = createAdminClient();
@@ -248,7 +252,7 @@ export async function getLatestScoreForRepo(
   return (data as RepoScoreRow | null) ?? null;
 }
 
-export async function getTopByRecommendation(
+async function _getTopByRecommendationInner(
   recommendation: string,
   limit = 10,
 ): Promise<ScoredRepoSummary[]> {
@@ -343,7 +347,34 @@ async function joinScoreRows(
 }
 
 // Top high-risk popular: high growth + high risk
-export async function getHighRiskPopular(
+// ----------------------------------------------------------------------------
+// Cached wrappers (perf pass).
+// Scoring runs nightly via cron; 15-min stale is invisible.
+// ----------------------------------------------------------------------------
+
+export const getLatestScoreForRepo: typeof _getLatestScoreForRepoInner = (
+  ...args
+) =>
+  unstable_cache(_getLatestScoreForRepoInner, ["getLatestScoreForRepo"], {
+    revalidate: SCORE_CACHE_TTL,
+    tags: [SCORE_CACHE_TAG],
+  })(...args);
+
+export const getTopByRecommendation: typeof _getTopByRecommendationInner = (
+  ...args
+) =>
+  unstable_cache(_getTopByRecommendationInner, ["getTopByRecommendation"], {
+    revalidate: SCORE_CACHE_TTL,
+    tags: [SCORE_CACHE_TAG],
+  })(...args);
+
+export const getHighRiskPopular: typeof _getHighRiskPopularInner = (...args) =>
+  unstable_cache(_getHighRiskPopularInner, ["getHighRiskPopular"], {
+    revalidate: SCORE_CACHE_TTL,
+    tags: [SCORE_CACHE_TAG],
+  })(...args);
+
+async function _getHighRiskPopularInner(
   limit = 10,
 ): Promise<ScoredRepoSummary[]> {
   const supabase = createAdminClient();

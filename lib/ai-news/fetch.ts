@@ -55,7 +55,7 @@ function buildItem(args: {
 // ---------- GitHub Trending source ----------
 async function fetchGithubTrendingItems(name: string): Promise<AiNewsItem[]> {
   try {
-    const repos = await fetchTrending("daily");
+    const repos = await fetchTrending("daily", { cached: true });
     const filtered = repos.filter((r) => {
       const desc = (r.description ?? "").toLowerCase();
       const lang = (r.language ?? "").toLowerCase();

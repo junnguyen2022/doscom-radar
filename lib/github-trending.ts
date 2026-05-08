@@ -24,6 +24,7 @@ function parseInt0(s: string): number | null {
 
 export async function fetchTrending(
   timeframe: Timeframe,
+  opts: { cached?: boolean } = {},
 ): Promise<TrendingRepo[]> {
   const url = timeframe === "daily" ? BASE : `${BASE}?since=${timeframe}`;
   const res = await fetch(url, {
@@ -32,7 +33,10 @@ export async function fetchTrending(
         "agent-trending-tracker/0.1 (+https://github.com/yourname/agent)",
       Accept: "text/html",
     },
-    cache: "no-store",
+    // Cron pass-through wants fresh; user-facing pages opt into 30-min cache.
+    ...(opts.cached
+      ? { next: { revalidate: 60 * 30 } }
+      : { cache: "no-store" as const }),
   });
 
   if (!res.ok) {

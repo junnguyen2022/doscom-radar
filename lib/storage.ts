@@ -1,6 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { unstable_cache } from "next/cache";
 import type { Timeframe } from "./github-trending";
+
+// Cache layer — perf pass.
+// All reads below are cron-driven (~daily), so 15-min stale is invisible.
+// Tag "snapshots" so a future invalidation hook (e.g. cron) can revalidate
+// everything in one call.
+const CACHE_TTL = 60 * 15; // 15 min
+const CACHE_TAG = "snapshots";
 
 export type SnapshotRow = {
   captured_at: string;
@@ -65,7 +73,7 @@ export async function upsertSnapshots(newRows: SnapshotRow[]): Promise<void> {
   await writeJsonFile([...map.values()]);
 }
 
-export async function latestForTimeframe(
+async function _latestForTimeframeInner(
   timeframe: Timeframe,
   limit = 10,
 ): Promise<{ rows: SnapshotRow[]; capturedAt: string | null }> {
@@ -105,7 +113,7 @@ export async function latestForTimeframe(
   return { rows: top, capturedAt: latest };
 }
 
-export async function dailyForDate(date: string): Promise<SnapshotRow[]> {
+async function _dailyForDateInner(date: string): Promise<SnapshotRow[]> {
   if (backendMode() === "supabase") {
     const { createAdminClient } = await import("./supabase/admin");
     const supabase = createAdminClient();
@@ -124,7 +132,7 @@ export async function dailyForDate(date: string): Promise<SnapshotRow[]> {
     .sort((a, b) => a.rank - b.rank);
 }
 
-export async function historyForRepo(
+async function _historyForRepoInner(
   owner: string,
   repo: string,
   timeframe: Timeframe = "daily",
@@ -150,7 +158,7 @@ export async function historyForRepo(
     .sort((a, b) => a.captured_at.localeCompare(b.captured_at));
 }
 
-export async function allRowsForLatestDate(
+async function _allRowsForLatestDateInner(
   timeframe: Timeframe,
 ): Promise<{ rows: SnapshotRow[]; capturedAt: string | null }> {
   // Like latestForTimeframe but no limit — returns the full set for one date.
@@ -190,7 +198,7 @@ export async function allRowsForLatestDate(
   };
 }
 
-export async function lastSnapshotInfo(): Promise<{
+async function _lastSnapshotInfoInner(): Promise<{
   capturedAt: string | null;
   totalRows: number;
 }> {
@@ -219,7 +227,7 @@ export async function lastSnapshotInfo(): Promise<{
   return { capturedAt: sorted[0].captured_at, totalRows: all.length };
 }
 
-export async function snapshotCountsByDate(
+async function _snapshotCountsByDateInner(
   timeframe: Timeframe = "daily",
   days: number = 14,
 ): Promise<{ date: string; count: number }[]> {
@@ -254,7 +262,7 @@ export async function snapshotCountsByDate(
     .map(([date, count]) => ({ date, count }));
 }
 
-export async function distinctDailyDates(): Promise<string[]> {
+async function _distinctDailyDatesInner(): Promise<string[]> {
   if (backendMode() === "supabase") {
     const { createAdminClient } = await import("./supabase/admin");
     const supabase = createAdminClient();
@@ -275,3 +283,77 @@ export async function distinctDailyDates(): Promise<string[]> {
   );
   return Array.from(dates).sort().reverse();
 }
+
+// ----------------------------------------------------------------------------
+// Cached wrappers (perf pass).
+// All snapshot reads are cron-driven (~daily). 15-min stale is invisible to
+// users and avoids re-querying Supabase on every render of /, /digest, and
+// /repo/[owner]/[repo] when those routes are revisited within the TTL.
+// File-mode (no Supabase env) skips the cache to keep dev workflow snappy.
+// ----------------------------------------------------------------------------
+
+const isSupabase = () => backendMode() === "supabase";
+
+export const latestForTimeframe: typeof _latestForTimeframeInner = (
+  ...args
+) =>
+  isSupabase()
+    ? unstable_cache(_latestForTimeframeInner, ["latestForTimeframe"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _latestForTimeframeInner(...args);
+
+export const dailyForDate: typeof _dailyForDateInner = (...args) =>
+  isSupabase()
+    ? unstable_cache(_dailyForDateInner, ["dailyForDate"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _dailyForDateInner(...args);
+
+export const historyForRepo: typeof _historyForRepoInner = (...args) =>
+  isSupabase()
+    ? unstable_cache(_historyForRepoInner, ["historyForRepo"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _historyForRepoInner(...args);
+
+export const allRowsForLatestDate: typeof _allRowsForLatestDateInner = (
+  ...args
+) =>
+  isSupabase()
+    ? unstable_cache(_allRowsForLatestDateInner, ["allRowsForLatestDate"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _allRowsForLatestDateInner(...args);
+
+export const lastSnapshotInfo: typeof _lastSnapshotInfoInner = (...args) =>
+  isSupabase()
+    ? unstable_cache(_lastSnapshotInfoInner, ["lastSnapshotInfo"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _lastSnapshotInfoInner(...args);
+
+export const snapshotCountsByDate: typeof _snapshotCountsByDateInner = (
+  ...args
+) =>
+  isSupabase()
+    ? unstable_cache(_snapshotCountsByDateInner, ["snapshotCountsByDate"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _snapshotCountsByDateInner(...args);
+
+export const distinctDailyDates: typeof _distinctDailyDatesInner = (
+  ...args
+) =>
+  isSupabase()
+    ? unstable_cache(_distinctDailyDatesInner, ["distinctDailyDates"], {
+        revalidate: CACHE_TTL,
+        tags: [CACHE_TAG],
+      })(...args)
+    : _distinctDailyDatesInner(...args);
