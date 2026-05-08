@@ -142,17 +142,18 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
     evidenceItems = [];
   }
 
-  // risk_note: prefer present + meaningful, but tolerate missing for non-adopt.
+  // risk_note: tolerate missing — set sensible default rather than reject.
   const riskNoteRaw = typeof r.risk_note === "string" ? r.risk_note : "";
-  if (rec === "adopt" && riskNoteRaw.length < 5) {
-    return {
-      error: `adopt requires risk_note (got "${riskNoteRaw}")`,
-    };
-  }
-  if (rec === "adopt" && evidenceItems.length < 2) {
-    return {
-      error: `adopt requires ≥2 evidence items, got ${evidenceItems.length}`,
-    };
+
+  // Downgrade adopt → test if missing risk_note or insufficient evidence.
+  // Better to accept a slightly weaker recommendation than fail entirely.
+  let finalRec: Recommendation = rec as Recommendation;
+  if (rec === "adopt") {
+    if (riskNoteRaw.length < 5) {
+      finalRec = "test";
+    } else if (evidenceItems.length < 2) {
+      finalRec = "test";
+    }
   }
 
   // Validate each evidence item — be lenient, skip invalid ones
@@ -189,7 +190,7 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
     doscom_use_case:
       typeof r.doscom_use_case === "string" ? r.doscom_use_case : null,
     risk_note: riskNoteRaw || "(no risk note provided)",
-    recommendation: rec as Recommendation,
+    recommendation: finalRec,
     confidence: conf as Confidence,
     evidence: ev,
   };
