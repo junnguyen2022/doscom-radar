@@ -14,6 +14,7 @@ export const DICT = {
   nav_compare: { vi: "So sánh", en: "Compare" },
   nav_languages: { vi: "Ngôn ngữ", en: "Languages" },
   nav_decisions: { vi: "Decisions", en: "Decisions" },
+  nav_ai_news: { vi: "AI News", en: "AI News" },
   nav_login: { vi: "Đăng nhập", en: "Sign in" },
   nav_logout: { vi: "Đăng xuất", en: "Sign out" },
 
@@ -73,6 +74,26 @@ export const DICT = {
   // AI insight
   ai_insight: { vi: "AI Insight hôm nay", en: "AI insight" },
   ai_loading: { vi: "Claude đang phân tích...", en: "Claude analyzing..." },
+
+  // Compare (V2.5)
+  compare_presets: { vi: "Presets", en: "Presets" },
+  compare_conclusion: { vi: "Kết luận", en: "Conclusion" },
+  compare_best_adopt: { vi: "Best for adopt", en: "Best for adopt" },
+  compare_best_monitor: { vi: "Đáng theo dõi", en: "Worth monitoring" },
+  compare_risk_callouts: { vi: "Cảnh báo rủi ro", en: "Risk callouts" },
+
+  // AI News (V2.5)
+  ai_news_title: { vi: "AI News Daily", en: "AI News Daily" },
+  ai_news_top: { vi: "Top AI News", en: "Top AI News" },
+  ai_news_tools: { vi: "Top Tools / Repos", en: "Top Tools / Repos" },
+  ai_news_models: { vi: "Model Updates", en: "Model Updates" },
+  ai_news_doscom: { vi: "Doscom Impact", en: "Doscom Impact" },
+  ai_news_actions: { vi: "Suggested Actions", en: "Suggested Actions" },
+
+  // Repo profile (V2.5)
+  repo_profile: { vi: "Repo Intelligence Profile", en: "Repo Intelligence Profile" },
+  repo_recommend: { vi: "Khuyến nghị cho Doscom", en: "Recommendation for Doscom" },
+  repo_similar: { vi: "Repo tương tự", en: "Similar repos" },
 
   // Tech radar
   radar_title: { vi: "Tech Radar", en: "Tech Radar" },

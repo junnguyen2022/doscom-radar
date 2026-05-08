@@ -31,6 +31,16 @@ import { getLatestInsight } from "@/lib/insight-generator";
 import { ScoreBreakdown, type ScoreData } from "@/components/repo/ScoreBreakdown";
 import { DecisionPanel } from "@/components/decisions/DecisionPanel";
 import { InsightCard, type InsightCardData } from "@/components/repo/InsightCard";
+import { fetchReadme } from "@/lib/github-readme";
+import { extractReadmeProfile, type ReadmeProfile } from "@/lib/readme-extractor";
+import { mapDoscomUseCases } from "@/lib/doscom-usecases";
+import { getSimilarRepos } from "@/lib/similar-repos";
+import { RepoIntelligenceProfile } from "@/components/repo/RepoIntelligenceProfile";
+import {
+  RecommendationCard,
+  buildRecommendation,
+} from "@/components/repo/RecommendationCard";
+import { SimilarRepos } from "@/components/repo/SimilarRepos";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { LanguageDot } from "@/components/ui/LanguageDot";
@@ -103,6 +113,26 @@ export default async function RepoDetail({
         Awaited<ReturnType<typeof getDecisionHistoryForRepo>>,
         Awaited<ReturnType<typeof getLatestInsight>>,
       ]);
+
+  // V2.5: README profile + Doscom mapping + similar repos.
+  const readmeRaw = await fetchReadme(owner, repo);
+  const readmeProfile: ReadmeProfile | null = readmeRaw
+    ? extractReadmeProfile(readmeRaw.content)
+    : null;
+  const doscomMatches = mapDoscomUseCases({
+    topics: repository?.topics ?? [],
+    language: repository?.language ?? null,
+    description: repository?.description ?? null,
+    readmeOverview: readmeProfile?.overview,
+    readmeFeatures: readmeProfile?.keyFeatures,
+  });
+  const similar = repository
+    ? await getSimilarRepos(owner, repo, {
+        topics: repository.topics ?? [],
+        language: repository.language,
+        limit: 6,
+      })
+    : [];
 
   const currentDecision = decisionHistory[0]?.decision ?? null;
 
@@ -482,6 +512,38 @@ export default async function RepoDetail({
           <ScoreBreakdown score={score} />
         </section>
       )}
+
+      {/* V2.5 — Recommendation Card (rule-based) */}
+      <section id="recommendation" className="mb-8">
+        <RecommendationCard
+          data={buildRecommendation({
+            radar: score?.radar_score ?? null,
+            risk: score?.risk_penalty ?? null,
+            relevance: score?.relevance_score ?? null,
+            maintenance: score?.maintenance_score ?? null,
+            doscomMatches,
+            readmeConfidence: readmeProfile?.confidence ?? "low",
+            readmeMissingData: readmeProfile?.missingData ?? ["readme"],
+            language: language,
+            archived: repository?.archived ?? false,
+            hasLicense: !!repository?.license_key,
+          })}
+        />
+      </section>
+
+      {/* V2.5 — Repo Intelligence Profile (README-derived) */}
+      <section id="profile" className="mb-8">
+        <RepoIntelligenceProfile
+          profile={readmeProfile}
+          doscomMatches={doscomMatches}
+          fetched={!!readmeRaw}
+        />
+      </section>
+
+      {/* V2.5 — Similar / Alternative repos */}
+      <section id="similar" className="mb-8">
+        <SimilarRepos source={{ owner, repo }} similar={similar} />
+      </section>
 
       {/* Decision panel — Phase 3 (auth-required) */}
       <section id="decision" className="mb-8">

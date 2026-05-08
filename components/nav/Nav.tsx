@@ -18,6 +18,7 @@ import {
   Sun,
   Languages,
   ListChecks,
+  Newspaper,
   LogIn,
   LogOut,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const ITEMS: { href: string; key: DictKey; icon: LucideIcon }[] = [
   { href: "/compare", key: "nav_compare", icon: GitCompare },
   { href: "/watchlist", key: "nav_watchlist", icon: Star },
   { href: "/decisions", key: "nav_decisions", icon: ListChecks },
+  { href: "/ai-news", key: "nav_ai_news", icon: Newspaper },
   { href: "/digest", key: "nav_digest", icon: FileText },
   { href: "/settings", key: "nav_settings", icon: Settings },
   { href: "/chat", key: "nav_chat", icon: MessageSquare },
