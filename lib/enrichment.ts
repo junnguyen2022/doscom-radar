@@ -319,6 +319,8 @@ export type MetricRow = {
   forks_count: number | null;
   open_issues_count: number | null;
   watchers_count: number | null;
+  contributors_count: number | null;
+  commits_30d: number | null;
   stars_delta_1d: number | null;
   stars_delta_7d: number | null;
   stars_delta_30d: number | null;
@@ -334,7 +336,7 @@ export async function getLatestMetrics(
   const { data } = await supabase
     .from("repo_metrics_daily")
     .select(
-      "metric_date, total_stars, forks_count, open_issues_count, watchers_count, stars_delta_1d, stars_delta_7d, stars_delta_30d, pushed_within_days, latest_release_at, latest_release_tag",
+      "metric_date, total_stars, forks_count, open_issues_count, watchers_count, contributors_count, commits_30d, stars_delta_1d, stars_delta_7d, stars_delta_30d, pushed_within_days, latest_release_at, latest_release_tag",
     )
     .eq("repo_id", repoId)
     .order("metric_date", { ascending: false })

@@ -28,6 +28,7 @@ import {
   TopTestCandidates,
   HighRiskPopular,
 } from "@/components/home/TopTestCandidates";
+import { DashboardDecisions } from "@/components/home/DashboardDecisions";
 import {
   getTopByRecommendation,
   getHighRiskPopular,
@@ -237,6 +238,9 @@ export default async function Home() {
           </Card>
         )}
       </section>
+
+      {/* Auth-only: Watchlist Due Review + Decision Summary */}
+      <DashboardDecisions />
 
       <TopTestCandidates items={testCandidates} />
 

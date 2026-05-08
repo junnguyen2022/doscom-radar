@@ -1,13 +1,14 @@
 import { historyForRepo } from "@/lib/storage";
+import { getRepository, getLatestMetrics } from "@/lib/enrichment";
+import { getLatestScoreForRepo } from "@/lib/scoring-store";
 import { computeHeat } from "@/lib/heat";
-import { classify, CLASS_LABEL } from "@/lib/classify";
 import { Sparkline } from "@/components/repo/Sparkline";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { LanguageDot } from "@/components/ui/LanguageDot";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GitCompare } from "lucide-react";
+import { GitCompare, Scale, Calendar, Tag } from "lucide-react";
 import { CompareInput } from "./CompareInput";
 import Link from "next/link";
 
@@ -24,18 +25,40 @@ type CompareRow = {
   totalStars: number | null;
   starsGained: number | null;
   heat: number;
-  classification: ReturnType<typeof classify>;
   rankHistory: number[];
+  // Phase 2.1 V2 polish — extended cols
+  forks: number | null;
+  contributors: number | null;
+  license: string | null;
+  pushedAt: string | null;
+  latestReleaseTag: string | null;
+  latestReleaseAt: string | null;
+  radarScore: number | null;
+  riskPenalty: number | null;
+  recommendation: string | null;
+  confidence: string | null;
+  riskFlags: string[];
 };
 
-const CLASS_TONE: Record<
-  ReturnType<typeof classify>,
-  "success" | "warning" | "danger"
+const REC_TONE: Record<
+  string,
+  "success" | "warning" | "danger" | "brand" | "neutral"
 > = {
   adopt: "success",
-  monitor: "warning",
+  test: "brand",
+  follow: "warning",
   caution: "danger",
+  ignore: "neutral",
 };
+
+function relativeShort(iso: string | null): string {
+  if (!iso) return "—";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days < 1) return "today";
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 async function loadCompareData(keys: string[]): Promise<CompareRow[]> {
   const valid = keys
@@ -46,18 +69,31 @@ async function loadCompareData(keys: string[]): Promise<CompareRow[]> {
       return { key: k, owner, repo };
     });
 
-  const histories = await Promise.all(
-    valid.map((v) => historyForRepo(v.owner, v.repo, "daily")),
+  // Fetch in parallel
+  const fetches = await Promise.all(
+    valid.map(async (v) => {
+      const [hist, repository] = await Promise.all([
+        historyForRepo(v.owner, v.repo, "daily"),
+        getRepository(v.owner, v.repo),
+      ]);
+      const [metrics, score] = await Promise.all([
+        repository ? getLatestMetrics(repository.id) : Promise.resolve(null),
+        repository
+          ? getLatestScoreForRepo(repository.id)
+          : Promise.resolve(null),
+      ]);
+      return { v, hist, repository, metrics, score };
+    }),
   );
 
-  return valid.map(({ key, owner, repo }, i) => {
-    const hist = histories[i];
+  return fetches.map(({ v, hist, repository, metrics, score }) => {
     const latest = hist.at(-1);
-    if (!latest) {
+
+    if (!latest && !repository) {
       return {
-        key,
-        owner,
-        repo,
+        key: v.key,
+        owner: v.owner,
+        repo: v.repo,
         found: false,
         language: null,
         description: null,
@@ -65,31 +101,52 @@ async function loadCompareData(keys: string[]): Promise<CompareRow[]> {
         totalStars: null,
         starsGained: null,
         heat: 0,
-        classification: "monitor" as const,
         rankHistory: [],
+        forks: null,
+        contributors: null,
+        license: null,
+        pushedAt: null,
+        latestReleaseTag: null,
+        latestReleaseAt: null,
+        radarScore: null,
+        riskPenalty: null,
+        recommendation: null,
+        confidence: null,
+        riskFlags: [],
       };
     }
+
+    const rank = latest?.rank ?? null;
+    const totalStars = metrics?.total_stars ?? latest?.total_stars ?? null;
+    const starsGained = latest?.stars_gained ?? null;
+
     return {
-      key,
-      owner,
-      repo,
+      key: v.key,
+      owner: v.owner,
+      repo: v.repo,
       found: true,
-      language: latest.language,
-      description: latest.description,
-      rank: latest.rank,
-      totalStars: latest.total_stars,
-      starsGained: latest.stars_gained,
+      language: repository?.language ?? latest?.language ?? null,
+      description: repository?.description ?? latest?.description ?? null,
+      rank,
+      totalStars,
+      starsGained,
       heat: computeHeat({
-        starsGained: latest.stars_gained,
-        totalStars: latest.total_stars,
-        rank: latest.rank,
-      }),
-      classification: classify({
-        starsGained: latest.stars_gained,
-        totalStars: latest.total_stars,
-        language: latest.language,
+        starsGained,
+        totalStars,
+        rank: rank ?? undefined,
       }),
       rankHistory: hist.map((s) => s.rank),
+      forks: metrics?.forks_count ?? null,
+      contributors: metrics?.contributors_count ?? null,
+      license: repository?.license_name ?? repository?.license_key ?? null,
+      pushedAt: repository?.pushed_at ?? null,
+      latestReleaseTag: metrics?.latest_release_tag ?? null,
+      latestReleaseAt: metrics?.latest_release_at ?? null,
+      radarScore: score ? Number(score.radar_score) : null,
+      riskPenalty: score ? Number(score.risk_penalty) : null,
+      recommendation: score?.recommendation ?? null,
+      confidence: score?.confidence ?? null,
+      riskFlags: score?.risk_flags ?? [],
     };
   });
 }
@@ -113,7 +170,7 @@ export default async function ComparePage({
       <PageHeader
         eyebrow="Compare"
         title="So sánh repos"
-        description="Side-by-side. Nhập owner/repo, ngăn cách bằng dấu phẩy."
+        description="Side-by-side với Radar Score, Risk, License, Maintenance — đánh giá adopt-readiness."
       />
 
       <CompareInput initialValue={keys.join(", ")} />
@@ -123,23 +180,28 @@ export default async function ComparePage({
           <EmptyState
             icon={GitCompare}
             title="Chưa có repo nào"
-            description="Nhập ít nhất 1 repo (ví dụ: vercel/next.js, facebook/react) rồi nhấn Enter."
+            description="Nhập ít nhất 1 repo (vd: vercel/next.js, facebook/react) rồi nhấn Enter."
           />
         </div>
       ) : (
         <Card className="mt-6 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-50 text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-400">
+              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
                 <tr>
-                  <th className="px-4 py-3 text-left">Repo</th>
-                  <th className="px-4 py-3 text-left">Lang</th>
-                  <th className="px-4 py-3 text-left">Class</th>
-                  <th className="px-4 py-3 text-right">Rank</th>
-                  <th className="px-4 py-3 text-right">Total ★</th>
-                  <th className="px-4 py-3 text-right">Gained</th>
-                  <th className="px-4 py-3 text-right">Heat</th>
-                  <th className="px-4 py-3 text-left">History</th>
+                  <th className="px-3 py-3 text-left">Repo</th>
+                  <th className="px-3 py-3 text-left">Lang</th>
+                  <th className="px-3 py-3 text-right">Total ★</th>
+                  <th className="px-3 py-3 text-right">Forks</th>
+                  <th className="px-3 py-3 text-right">Contrib</th>
+                  <th className="px-3 py-3 text-left">License</th>
+                  <th className="px-3 py-3 text-left">Pushed</th>
+                  <th className="px-3 py-3 text-left">Release</th>
+                  <th className="px-3 py-3 text-right">Heat</th>
+                  <th className="px-3 py-3 text-right">Radar</th>
+                  <th className="px-3 py-3 text-right">Risk</th>
+                  <th className="px-3 py-3 text-left">Reco</th>
+                  <th className="px-3 py-3 text-left">History</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -148,7 +210,7 @@ export default async function ComparePage({
                     key={r.key}
                     className="transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
                   >
-                    <td className="px-4 py-3 font-medium">
+                    <td className="px-3 py-3 font-medium">
                       <Link
                         href={`/repo/${r.owner}/${r.repo}`}
                         className="text-zinc-900 hover:text-brand-600 dark:text-zinc-100 dark:hover:text-brand-400"
@@ -157,11 +219,11 @@ export default async function ComparePage({
                       </Link>
                       {!r.found && (
                         <span className="ml-2 text-xs text-rose-500">
-                          not in snapshots
+                          not in DB
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs">
+                    <td className="px-3 py-3 text-xs">
                       {r.language ? (
                         <span className="inline-flex items-center gap-1.5">
                           <LanguageDot language={r.language} />
@@ -171,35 +233,104 @@ export default async function ComparePage({
                         "—"
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      {r.found && (
-                        <Badge tone={CLASS_TONE[r.classification]}>
-                          {CLASS_LABEL[r.classification].vi}
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {r.rank != null ? `#${r.rank}` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    <td className="px-3 py-3 text-right tabular-nums">
                       {r.totalStars != null
                         ? r.totalStars.toLocaleString()
                         : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
-                      {r.starsGained != null
-                        ? `+${r.starsGained.toLocaleString()}`
-                        : "—"}
+                    <td className="px-3 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
+                      {r.forks != null ? r.forks.toLocaleString() : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-orange-600 dark:text-orange-400">
+                    <td className="px-3 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
+                      {r.contributors ?? "—"}
+                    </td>
+                    <td className="px-3 py-3 text-xs">
+                      {r.license ? (
+                        <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400">
+                          <Scale className="h-3 w-3" />
+                          {r.license.length > 12
+                            ? r.license.slice(0, 12) + "…"
+                            : r.license}
+                        </span>
+                      ) : (
+                        <span className="text-rose-500">none</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-zinc-600 dark:text-zinc-400">
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {relativeShort(r.pushedAt)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-xs">
+                      {r.latestReleaseTag ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400"
+                          title={
+                            r.latestReleaseAt
+                              ? `Released ${relativeShort(r.latestReleaseAt)}`
+                              : ""
+                          }
+                        >
+                          <Tag className="h-3 w-3" />
+                          {r.latestReleaseTag.length > 10
+                            ? r.latestReleaseTag.slice(0, 10) + "…"
+                            : r.latestReleaseTag}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums font-semibold text-orange-600 dark:text-orange-400">
                       {r.found ? r.heat : "—"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3 text-right tabular-nums font-bold text-brand-600 dark:text-brand-400">
+                      {r.radarScore != null ? r.radarScore : "—"}
+                    </td>
+                    <td
+                      className="px-3 py-3 text-right tabular-nums"
+                      title={
+                        r.riskFlags.length > 0
+                          ? `Flags: ${r.riskFlags.join(", ")}`
+                          : ""
+                      }
+                    >
+                      {r.riskPenalty != null ? (
+                        <span
+                          className={
+                            r.riskPenalty >= 50
+                              ? "font-bold text-rose-600 dark:text-rose-400"
+                              : r.riskPenalty >= 25
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-emerald-600 dark:text-emerald-400"
+                          }
+                        >
+                          {r.riskPenalty}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {r.recommendation && (
+                        <Badge
+                          tone={REC_TONE[r.recommendation] ?? "neutral"}
+                          className="text-[10px]"
+                        >
+                          {r.recommendation}
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
                       {r.rankHistory.length > 1 ? (
-                        <Sparkline ranks={r.rankHistory} width={80} height={20} />
+                        <Sparkline
+                          ranks={r.rankHistory}
+                          width={60}
+                          height={18}
+                        />
                       ) : (
                         <span className="text-xs text-zinc-400">
-                          {r.rankHistory.length === 1 ? "1 pt" : "—"}
+                          {r.rankHistory.length === 1 ? "1pt" : "—"}
                         </span>
                       )}
                     </td>
