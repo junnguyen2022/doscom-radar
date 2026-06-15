@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 import {
   type Filters,
   type SortKey,
+  type BrandFilter,
   filtersToQuery,
 } from "@/lib/filters";
 import type { Classification } from "@/lib/classify";
@@ -44,6 +45,13 @@ export function FilterBar({
     { key: "gained", label: t("stars_gained", lang) },
     { key: "total", label: t("total_stars", lang) },
     { key: "rank", label: t("rank", lang) },
+    { key: "brand", label: "Brand fit" },
+  ];
+
+  const BRANDS: { key: BrandFilter; label: string }[] = [
+    { key: "", label: lang === "vi" ? "Tất cả" : "All" },
+    { key: "doscom", label: "DOSCOM" },
+    { key: "noma", label: "NOMA" },
   ];
 
   const TOPS = [10, 20, 50, 0];
@@ -189,6 +197,30 @@ export function FilterBar({
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${tones[c.key]}`}
             >
               {t(c.key_t, lang)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Brand filter */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          {lang === "vi" ? "Thương hiệu" : "Brand"}:
+        </span>
+        {BRANDS.map((b) => {
+          const active = current.brand === b.key;
+          return (
+            <button
+              key={b.key || "all"}
+              type="button"
+              onClick={() => update({ brand: b.key })}
+              className={
+                active
+                  ? "rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white shadow-sm"
+                  : "rounded-full border border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-100"
+              }
+            >
+              {b.label}
             </button>
           );
         })}

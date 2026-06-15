@@ -1,7 +1,9 @@
 import type { Timeframe } from "./github-trending";
 import type { Classification } from "./classify";
 
-export type SortKey = "heat" | "gained" | "total" | "rank";
+export type SortKey = "heat" | "gained" | "total" | "rank" | "brand";
+
+export type BrandFilter = "" | "doscom" | "noma";
 
 export type Filters = {
   timeframe: Timeframe;
@@ -13,6 +15,7 @@ export type Filters = {
   topN: number; // 0 = all
   classes: Classification[];
   collection: string; // collection slug, "" = no filter
+  brand: BrandFilter; // "" = mọi brand
 };
 
 export const DEFAULT_FILTERS: Filters = {
@@ -25,6 +28,7 @@ export const DEFAULT_FILTERS: Filters = {
   topN: 0,
   classes: ["adopt", "monitor", "caution"],
   collection: "",
+  brand: "",
 };
 
 export function parseFilters(
@@ -43,9 +47,16 @@ export function parseFilters(
 
   const sortStr = get("sort");
   const sort: SortKey =
-    sortStr === "gained" || sortStr === "total" || sortStr === "rank"
+    sortStr === "gained" ||
+    sortStr === "total" ||
+    sortStr === "rank" ||
+    sortStr === "brand"
       ? sortStr
       : "heat";
+
+  const brandStr = get("brand");
+  const brand: BrandFilter =
+    brandStr === "doscom" || brandStr === "noma" ? brandStr : "";
 
   const classesStr = (get("classes") ?? "").split(",").filter(Boolean);
   const classes = classesStr.length
@@ -68,6 +79,7 @@ export function parseFilters(
     topN,
     classes,
     collection: (get("collection") ?? "").trim(),
+    brand,
   };
 }
 
@@ -82,5 +94,6 @@ export function filtersToQuery(f: Filters): string {
   if (f.topN > 0) params.set("topN", String(f.topN));
   if (f.classes.length !== 3) params.set("classes", f.classes.join(","));
   if (f.collection) params.set("collection", f.collection);
+  if (f.brand) params.set("brand", f.brand);
   return params.toString();
 }

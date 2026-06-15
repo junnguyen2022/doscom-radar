@@ -6,9 +6,13 @@ import {
 } from "@/lib/storage";
 import { computeHeat } from "@/lib/heat";
 import { classify } from "@/lib/classify";
+import { computeBrandFit } from "@/lib/brand-fit";
 import { parseFilters } from "@/lib/filters";
 import { getCollection } from "@/lib/collections";
 import { RepoCard, type RepoCardData } from "@/components/repo/RepoCard";
+import type { BrandFit } from "@/lib/brand-fit";
+
+type CardWithFits = RepoCardData & { _fits?: BrandFit[] };
 import { FilterBar } from "@/components/filters/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -21,7 +25,7 @@ function applyFilters(
   rows: SnapshotRow[],
   filters: ReturnType<typeof parseFilters>,
 ): RepoCardData[] {
-  let filtered: RepoCardData[] = rows.map((r) => {
+  let filtered: CardWithFits[] = rows.map((r) => {
     const heat = computeHeat({
       starsGained: r.stars_gained,
       totalStars: r.total_stars,
@@ -31,6 +35,11 @@ function applyFilters(
       starsGained: r.stars_gained,
       totalStars: r.total_stars,
       language: r.language,
+    });
+    // Brand fit từ description + language (topics chỉ có ở trang chi tiết repo).
+    const fits = computeBrandFit({
+      language: r.language,
+      description: r.description,
     });
     return {
       rank: r.rank,
@@ -43,8 +52,20 @@ function applyFilters(
       url: r.url,
       heat,
       classification: c,
+      brandFits: fits.map((f) => ({
+        brand: f.brand,
+        brandName: f.brandName,
+        tier: f.tier,
+      })),
+      _fits: fits,
     };
   });
+
+  if (filters.brand) {
+    filtered = filtered.filter((r) =>
+      (r._fits ?? []).some((f) => f.brand === filters.brand),
+    );
+  }
 
   if (filters.languages.length) {
     filtered = filtered.filter(
@@ -90,6 +111,15 @@ function applyFilters(
     }
   }
 
+  // Điểm brand để sort: nếu đang lọc 1 brand → điểm brand đó; nếu không → điểm brand cao nhất.
+  const brandScore = (r: CardWithFits): number => {
+    const fits = r._fits ?? [];
+    if (filters.brand) {
+      return fits.find((f) => f.brand === filters.brand)?.score ?? 0;
+    }
+    return fits[0]?.score ?? 0;
+  };
+
   filtered.sort((a, b) => {
     switch (filters.sort) {
       case "gained":
@@ -98,6 +128,8 @@ function applyFilters(
         return (b.totalStars ?? 0) - (a.totalStars ?? 0);
       case "rank":
         return a.rank - b.rank;
+      case "brand":
+        return brandScore(b) - brandScore(a) || b.heat - a.heat;
       default:
         return b.heat - a.heat;
     }

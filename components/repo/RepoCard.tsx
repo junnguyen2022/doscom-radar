@@ -25,6 +25,13 @@ export type RepoCardData = {
   heat: number;
   classification: Classification;
   rankHistory?: number[];
+  brandFits?: { brand: "doscom" | "noma"; brandName: string; tier: string }[];
+};
+
+const BRAND_CHIP: Record<"doscom" | "noma", string> = {
+  doscom:
+    "bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900/50",
+  noma: "bg-blue-100 text-blue-800 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900/50",
 };
 
 const CLASS_TONE: Record<Classification, "success" | "warning" | "danger"> = {
@@ -68,6 +75,21 @@ export function RepoCard({ r }: { r: RepoCardData }) {
             <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
               {r.description}
             </p>
+          )}
+
+          {r.brandFits && r.brandFits.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              {r.brandFits.map((bf) => (
+                <span
+                  key={bf.brand}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BRAND_CHIP[bf.brand]}`}
+                  title={`Phù hợp ${bf.brandName} (mức ${bf.tier})`}
+                >
+                  {bf.brandName}
+                  {bf.tier === "high" ? " ★" : ""}
+                </span>
+              ))}
+            </div>
           )}
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs">
