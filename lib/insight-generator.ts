@@ -4,6 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "./supabase/admin";
 import { collectionsForRepo } from "./collections";
+import { mapDoscomUseCases } from "./doscom-usecases";
 import {
   INSIGHT_TOOL,
   PROMPT_VERSION,
@@ -95,6 +96,12 @@ async function generateOne(
 
   const collections = collectionsForRepo(repo.owner, repo.repo);
 
+  const brandMatches = mapDoscomUseCases({
+    topics: repo.topics ?? [],
+    language: repo.language,
+    description: repo.description,
+  }).map((m) => `${m.department} (matched: ${m.matchedSignals.join(", ")})`);
+
   const prompt = buildUserPrompt({
     full_name: `${repo.owner}/${repo.repo}`,
     description: repo.description,
@@ -124,6 +131,7 @@ async function generateOne(
     rank: snapshot?.rank ?? null,
     stars_today: snapshot?.stars_gained ?? null,
     collections: collections.map((c) => c.name),
+    brand_matches: brandMatches,
   });
 
   const response = await client.messages.create({

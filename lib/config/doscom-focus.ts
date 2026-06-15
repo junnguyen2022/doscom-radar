@@ -1,9 +1,18 @@
 // Doscom Holdings — focus areas for relevance scoring.
 // Refine these tiers when you see false positives/negatives in /trending.
 //
-// High = direct fit cho roadmap (AI agents, automation, internal tools, ecommerce).
+// High = direct fit cho roadmap (AI agents, automation, internal tools, ecommerce,
+//        + brand-specific: DOSCOM security/vision/IoT, NOMA ecommerce/content).
 // Medium = supporting infra (data, devops, monitoring).
 // Low = không phải core business (gamedev, crypto, mobile-only).
+//
+// Brand-specific topics được merge từ lib/config/brand-core.ts (single source).
+
+import {
+  allBrandTechHigh,
+  allBrandTechMedium,
+  HOLDINGS_AVOID,
+} from "./brand-core";
 
 export type RelevanceTier = "high" | "medium" | "low" | "none";
 
@@ -13,41 +22,36 @@ type FocusBucket = {
   collections: string[];
 };
 
+// Topics gắn với roadmap chung (không thuộc brand cụ thể).
+const BASE_HIGH_TOPICS = [
+  // AI/Agent (top priority)
+  "anthropic",
+  "claude",
+  "openai",
+  "gpt",
+  // Dev productivity
+  "devtool",
+  "developer-tools",
+  // Business apps
+  "erp",
+  "hr",
+  "business",
+  "company-os",
+];
+
+const BASE_MEDIUM_TOPICS = [
+  "kubernetes",
+  "k8s",
+  "serverless",
+  "container",
+];
+
+const dedupe = (xs: string[]) => Array.from(new Set(xs));
+
 export const DOSCOM_FOCUS: Record<"high" | "medium" | "low", FocusBucket> = {
   high: {
-    topics: [
-      // AI/Agent (top priority)
-      "ai-agent",
-      "agent",
-      "agents",
-      "llm",
-      "rag",
-      "mcp",
-      "anthropic",
-      "claude",
-      "openai",
-      "gpt",
-      // Automation & workflow
-      "automation",
-      "workflow",
-      "no-code",
-      "low-code",
-      // Dev productivity
-      "devtool",
-      "developer-tools",
-      // Business apps (Doscom core)
-      "crm",
-      "erp",
-      "hr",
-      "ecommerce",
-      "business",
-      "internal-tool",
-      "company-os",
-      // Data & insights
-      "analytics",
-      "observability",
-      "dashboard",
-    ],
+    // Merge: roadmap chung + tín hiệu tech của 2 brand (DOSCOM + NOMA) + AI backbone.
+    topics: dedupe([...BASE_HIGH_TOPICS, ...allBrandTechHigh()]),
     languages: ["TypeScript", "Python"],
     collections: [
       "artificial-intelligence",
@@ -59,17 +63,7 @@ export const DOSCOM_FOCUS: Record<"high" | "medium" | "low", FocusBucket> = {
     ],
   },
   medium: {
-    topics: [
-      "data-pipeline",
-      "etl",
-      "monitoring",
-      "kubernetes",
-      "k8s",
-      "serverless",
-      "container",
-      "vector-database",
-      "embedding",
-    ],
+    topics: dedupe([...BASE_MEDIUM_TOPICS, ...allBrandTechMedium()]),
     languages: ["Go", "Rust", "Java"],
     collections: [
       "time-series-database",
@@ -79,19 +73,12 @@ export const DOSCOM_FOCUS: Record<"high" | "medium" | "low", FocusBucket> = {
     ],
   },
   low: {
-    topics: [
-      "game",
-      "gamedev",
-      "godot",
-      "crypto",
-      "blockchain",
-      "nft",
-      "defi",
-      "web3",
+    topics: dedupe([
+      ...HOLDINGS_AVOID,
       "mobile-only",
       "ios-only",
       "android-only",
-    ],
+    ]),
     languages: ["Solidity", "Move", "Cairo"],
     collections: ["game-engine", "javascript-game-engine"],
   },

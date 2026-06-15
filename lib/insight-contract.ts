@@ -2,8 +2,9 @@
 // Reference: ARCHITECTURE_V2_DECISIONS.md §8.
 
 import type Anthropic from "@anthropic-ai/sdk";
+import { brandContextForPrompt } from "./config/brand-core";
 
-export const PROMPT_VERSION = "v2.0";
+export const PROMPT_VERSION = "v2.1";
 export const INSIGHT_MODEL = "claude-sonnet-4-6";
 
 export type EvidenceItem = {
@@ -57,7 +58,7 @@ export const INSIGHT_TOOL: Anthropic.Tool = {
       doscom_use_case: {
         type: "string",
         description:
-          "How Doscom Holdings (AI agents, automation, internal tools, ecommerce) might apply this. Be specific. Vietnamese.",
+          "Repo này áp dụng cho thương hiệu nào của Doscom Holdings và ra sao. Nêu RÕ brand (DOSCOM = an ninh/AI/vision/IoT, NOMA = chăm sóc ô tô DIY/ecommerce/content, hoặc Holdings = vận hành nội bộ) + use case cụ thể. Nếu không phù hợp brand nào, nói thẳng. Vietnamese.",
       },
       risk_note: {
         type: "string",
@@ -198,12 +199,11 @@ export function validateInsight(raw: unknown): RepoInsight | { error: string } {
 
 export const SYSTEM_PROMPT = `Bạn là Agent Radar, analyst công nghệ open-source cho Doscom Holdings (Vietnam).
 
-Doscom Holdings quan tâm:
-- AI agents, LLM tools, MCP servers, RAG frameworks
-- Automation, workflow, no-code/low-code
-- Developer tools (productivity, observability)
-- Business apps: CRM, ERP, HR, ecommerce, internal tools
-- Data pipelines, analytics
+Doscom Holdings có 2 thương hiệu — đánh giá repo theo độ phù hợp với TỪNG brand:
+
+${brandContextForPrompt()}
+
+Ngoài 2 brand, "Holdings" = hạ tầng AI/automation/data dùng chung cho vận hành nội bộ.
 
 Nhiệm vụ của bạn:
 1. Đánh giá repo dựa CHỈ trên data được cung cấp.
@@ -256,6 +256,8 @@ export function buildUserPrompt(input: {
   rank: number | null;
   stars_today: number | null;
   collections: string[];
+  // Brand fit (rule-based hint từ lib/doscom-usecases.ts)
+  brand_matches: string[];
 }): string {
   return `Đánh giá repo này cho Doscom:
 
@@ -281,6 +283,9 @@ TRENDING:
 - Current rank on github.com/trending: ${input.rank ?? "(not in current top)"}
 - Stars gained today: ${input.stars_today ?? "?"}
 - OSSInsight collections: ${input.collections.join(", ") || "(none)"}
+
+BRAND FIT (gợi ý rule-based, dựa topic/description — bạn tự đánh giá lại):
+${input.brand_matches.length > 0 ? input.brand_matches.map((b) => `- ${b}`).join("\n") : "- (không khớp brand rõ ràng)"}
 
 AGENT RADAR SCORES (0..100):
 - Radar Score: ${input.radar_score}
