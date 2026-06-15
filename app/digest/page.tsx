@@ -60,7 +60,7 @@ export default async function DigestPage() {
       <PageHeader
         eyebrow="Digest"
         title="Bản tin Markdown"
-        description="Copy & paste vào Slack / email / blog. Tự sinh từ snapshot mới nhất."
+        description="Mở đầu bằng Brand Spotlight (DOSCOM/NOMA tuần này). Copy & paste vào Slack / email / blog."
       />
       <DigestClient markdown={md} />
     </main>

@@ -1,6 +1,8 @@
 import type { SnapshotRow } from "./storage";
 import { computeHeat } from "./heat";
 import { classify } from "./classify";
+import { computeBrandFit } from "./brand-fit";
+import { BRAND_LIST } from "./config/brand-core";
 
 export type DigestData = {
   capturedAt: string;
@@ -14,11 +16,84 @@ export type DigestData = {
   };
 };
 
+const BRAND_EMOJI: Record<string, string> = { doscom: "🛡️", noma: "🚗" };
+
+// Brand Spotlight — top repo phù hợp từng thương hiệu trong tập rows cho trước.
+function brandSpotlightSection(rows: SnapshotRow[], perBrand = 5): string[] {
+  const lines: string[] = [];
+  lines.push("## 🎯 Brand Spotlight tuần này");
+  lines.push("");
+  lines.push(
+    "_Repo đáng chú ý cho từng thương hiệu — chấm theo mô tả + ngôn ngữ (chi tiết hơn ở trang repo)._",
+  );
+  lines.push("");
+
+  // Tính brand fit 1 lần cho mọi row.
+  const scored = rows.map((r) => ({
+    row: r,
+    fits: computeBrandFit({ language: r.language, description: r.description }),
+  }));
+
+  let anyMatch = false;
+  for (const brand of BRAND_LIST) {
+    const matched = scored
+      .map((s) => ({
+        row: s.row,
+        fit: s.fits.find((f) => f.brand === brand.id),
+      }))
+      .filter((x): x is { row: SnapshotRow; fit: NonNullable<typeof x.fit> } =>
+        Boolean(x.fit),
+      )
+      .sort(
+        (a, b) =>
+          b.fit.score - a.fit.score ||
+          (b.row.stars_gained ?? 0) - (a.row.stars_gained ?? 0),
+      )
+      .slice(0, perBrand);
+
+    lines.push(`### ${BRAND_EMOJI[brand.id] ?? ""} ${brand.name}`);
+    if (matched.length === 0) {
+      lines.push(
+        "_Tuần này chưa có repo trending khớp rõ — không ép gợi ý._",
+      );
+      lines.push("");
+      continue;
+    }
+    anyMatch = true;
+    for (const m of matched) {
+      const tierMark = m.fit.tier === "high" ? "★" : "";
+      const total =
+        m.row.total_stars != null ? m.row.total_stars.toLocaleString() : "?";
+      lines.push(
+        `- **[${m.row.owner}/${m.row.repo}](${m.row.url})** ${tierMark} — fit \`${m.fit.score}\` (${m.fit.tier}) · ${total} ★ · \`${m.row.language ?? "—"}\``,
+      );
+      lines.push(`  - Khớp: ${m.fit.matched.join(", ")}`);
+      if (m.row.description) {
+        lines.push(`  - ${m.row.description.slice(0, 160)}`);
+      }
+    }
+    lines.push("");
+  }
+
+  if (!anyMatch) {
+    lines.push(
+      "> Không có repo nào khớp DOSCOM/NOMA trong trending tuần này. Bình thường khi trending nghiêng về dev-tools.",
+    );
+    lines.push("");
+  }
+
+  return lines;
+}
+
 export function generateMarkdownDigest(data: DigestData): string {
   const lines: string[] = [];
 
   lines.push(`# GitHub Trending Digest — ${data.capturedAt}`);
   lines.push("");
+
+  // Brand Spotlight lên đầu — ưu tiên dữ liệu weekly (bản tin tuần), fallback daily.
+  const brandRows = data.weekly.length > 0 ? data.weekly : data.daily;
+  lines.push(...brandSpotlightSection(brandRows));
 
   const sections: { title: string; rows: SnapshotRow[]; tag: string }[] = [
     { title: "🔥 Top hôm nay (Daily)", rows: data.daily, tag: "today" },
