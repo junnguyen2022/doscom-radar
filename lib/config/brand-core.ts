@@ -26,6 +26,9 @@ export type BrandProfile = {
   techMedium: string[]; // fit hỗ trợ
   useCases: BrandUseCase[]; // khi repo khớp → gợi ý áp dụng
   redLines: string[]; // guardrail nội dung (cho prompt + content-tool recs)
+  // Cụm từ tìm kiếm GitHub (Brand Discovery) — chủ động tìm repo ngách hợp brand,
+  // không phụ thuộc trending. Cho phép cụm nhiều từ ("computer vision").
+  discoveryTerms: string[];
 };
 
 export const BRANDS: Record<BrandId, BrandProfile> = {
@@ -111,6 +114,15 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       'Không content "theo dõi/nghe lén người khác" — chỉ "bảo vệ chính mình"',
       'Từ cấm: "rẻ nhất", "theo dõi bí mật", "nghe lén"',
     ],
+    // Tối đa 6 term (giới hạn 5 OR của GitHub Search). KHÔNG bọc ngoặc.
+    discoveryTerms: [
+      '"computer vision"',
+      "cctv",
+      "rtsp",
+      "onvif",
+      "surveillance",
+      '"gps tracking"',
+    ],
   },
   noma: {
     id: "noma",
@@ -181,6 +193,15 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       'KHÔNG "Made in USA" / "Chất lượng Mỹ" — sản xuất tại TQ, chỉ "chuẩn mực Mỹ"',
       'Không "xóa hoàn toàn", "100% an toàn", "tốt nhất", "số 1", "bảo vệ vĩnh viễn"',
       'Từ cấm: "rẻ nhất", "siêu rẻ", "hàng xịn", "chính hãng Mỹ", "bảo hành trọn đời"',
+    ],
+    // Tối đa 6 term (giới hạn 5 OR của GitHub Search). KHÔNG bọc ngoặc.
+    discoveryTerms: [
+      "ecommerce",
+      "marketplace",
+      "shopify",
+      "woocommerce",
+      '"video editing"',
+      "livestream",
     ],
   },
 };

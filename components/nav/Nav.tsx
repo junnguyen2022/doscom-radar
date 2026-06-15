@@ -9,6 +9,7 @@ import {
   FolderKanban,
   Code2,
   Radar,
+  Compass,
   GitCompare,
   Star,
   FileText,
@@ -29,6 +30,7 @@ import { t, type DictKey } from "@/lib/i18n";
 const ITEMS: { href: string; key: DictKey; icon: LucideIcon }[] = [
   { href: "/", key: "nav_dashboard", icon: LayoutDashboard },
   { href: "/trending", key: "nav_trending", icon: TrendingUp },
+  { href: "/discover", key: "nav_discover", icon: Compass },
   { href: "/movers", key: "nav_movers", icon: Activity },
   { href: "/collections", key: "nav_collections", icon: FolderKanban },
   { href: "/languages", key: "nav_languages", icon: Code2 },

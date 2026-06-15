@@ -15,6 +15,7 @@ export const DICT = {
   nav_languages: { vi: "Ngôn ngữ", en: "Languages" },
   nav_decisions: { vi: "Decisions", en: "Decisions" },
   nav_ai_news: { vi: "AI News", en: "AI News" },
+  nav_discover: { vi: "Khám phá", en: "Discover" },
   nav_login: { vi: "Đăng nhập", en: "Sign in" },
   nav_logout: { vi: "Đăng xuất", en: "Sign out" },
 
