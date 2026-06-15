@@ -23,7 +23,7 @@ export function Hero({
       <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand-500/10 blur-3xl" />
       <div className="absolute -left-32 bottom-0 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
 
-      <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[3fr_2fr] lg:items-center">
+      <div className="relative grid w-full gap-10 lg:grid-cols-[3fr_2fr] lg:items-center">
         {/* Left — headline */}
         <div>
           <p className="mb-3 font-mono text-sm text-zinc-500 dark:text-zinc-400">

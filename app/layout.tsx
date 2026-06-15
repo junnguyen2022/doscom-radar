@@ -41,11 +41,11 @@ export default function RootLayout({
         <AppProvider>
           <div className="min-h-screen">
             <Nav />
-            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <div className="w-full px-4 py-6 sm:px-6 lg:px-10 2xl:px-16">
               <div className="animate-fade-in">{children}</div>
             </div>
             <footer className="mt-16 border-t border-zinc-200 dark:border-zinc-800">
-              <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-6 text-xs text-zinc-500 dark:text-zinc-400 sm:px-6 lg:px-8">
+              <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-6 text-xs text-zinc-500 dark:text-zinc-400 sm:px-6 lg:px-10 2xl:px-16">
                 <div>
                   <span className="font-semibold text-zinc-700 dark:text-zinc-300">
                     Agent Radar

@@ -372,7 +372,7 @@ export default async function RepoDetail({
         <div className="absolute inset-0 bg-grid opacity-30" />
         <div className="absolute -right-20 top-0 h-64 w-64 rounded-full bg-brand-500/10 blur-3xl" />
 
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative w-full">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
               Repository Analytics

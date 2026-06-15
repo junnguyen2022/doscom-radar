@@ -48,7 +48,7 @@ export function Nav() {
 
   return (
     <nav className="glass sticky top-0 z-20 border-b border-zinc-200 dark:border-zinc-800">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2.5 sm:px-6 lg:px-8">
+      <div className="flex w-full flex-wrap items-center gap-1 px-4 py-2.5 sm:px-6 lg:px-10 2xl:px-16">
         <Link
           href="/"
           className="mr-3 flex items-center gap-2 font-bold tracking-tight"
