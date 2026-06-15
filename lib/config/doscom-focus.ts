@@ -48,10 +48,13 @@ const BASE_MEDIUM_TOPICS = [
 
 const dedupe = (xs: string[]) => Array.from(new Set(xs));
 
+const HIGH_TOPICS = dedupe([...BASE_HIGH_TOPICS, ...allBrandTechHigh()]);
+const HIGH_SET = new Set(HIGH_TOPICS);
+
 export const DOSCOM_FOCUS: Record<"high" | "medium" | "low", FocusBucket> = {
   high: {
     // Merge: roadmap chung + tín hiệu tech của 2 brand (DOSCOM + NOMA) + AI backbone.
-    topics: dedupe([...BASE_HIGH_TOPICS, ...allBrandTechHigh()]),
+    topics: HIGH_TOPICS,
     languages: ["TypeScript", "Python"],
     collections: [
       "artificial-intelligence",
@@ -63,7 +66,10 @@ export const DOSCOM_FOCUS: Record<"high" | "medium" | "low", FocusBucket> = {
     ],
   },
   medium: {
-    topics: dedupe([...BASE_MEDIUM_TOPICS, ...allBrandTechMedium()]),
+    // Loại topic đã nằm ở high để computeRelevance không đếm trùng (high + medium).
+    topics: dedupe([...BASE_MEDIUM_TOPICS, ...allBrandTechMedium()]).filter(
+      (t) => !HIGH_SET.has(t),
+    ),
     languages: ["Go", "Rust", "Java"],
     collections: [
       "time-series-database",

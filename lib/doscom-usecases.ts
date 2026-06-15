@@ -46,10 +46,9 @@ export function mapDoscomUseCases(input: {
   const matches: DoscomMatch[] = [];
 
   for (const brand of BRAND_LIST) {
-    // Signal khớp với brand này (ưu tiên techHigh, bổ sung techMedium).
-    const hits = [...brand.techHigh, ...brand.techMedium].filter((k) =>
-      hay.includes(k),
-    );
+    // Chỉ match qua tín hiệu ĐỊNH DANH (techHigh) để tránh gắn nhầm nhãn brand từ
+    // từ khoá chung (vd repo LLM bị tag "Camera AI"). techMedium chỉ dùng cho scoring.
+    const hits = brand.techHigh.filter((k) => hay.includes(k));
     if (hits.length === 0) continue;
 
     // Mỗi use-case department của brand → 1 match (chip hiển thị có nhãn brand).

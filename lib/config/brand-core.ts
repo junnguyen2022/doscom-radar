@@ -36,6 +36,9 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
     business:
       "An ninh & bảo mật cá nhân: camera AI, dò camera/máy nghe lén, chống ghi âm, ghi âm, định vị GPS, chuông cửa thông minh, dashcam 4G. Tầm nhìn 2030 dẫn đầu bằng AI.",
     tagline: "Công nghệ thế hệ mới — bán sự an tâm.",
+    // CHỈ tín hiệu ĐỊNH DANH DOSCOM (an ninh/vision/phần cứng/định vị).
+    // AI chung (agent/llm/rag/mcp) KHÔNG để ở đây — nằm trong HOLDINGS_SHARED_HIGH —
+    // nếu không mọi repo LLM sẽ bị gắn nhầm nhãn "Camera AI".
     techHigh: [
       // Computer vision / video analytics — lõi camera an ninh
       "computer-vision",
@@ -50,12 +53,10 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "onvif",
       "yolo",
       "image-recognition",
-      // AI brain
-      "ai-agent",
-      "agent",
-      "llm",
-      "rag",
-      "mcp",
+      "image-processing",
+      "opencv",
+      "ocr",
+      "pose-estimation",
       "anomaly-detection",
       // IoT / edge / embedded — thiết bị phần cứng
       "iot",
@@ -81,10 +82,6 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "audio-processing",
     ],
     techMedium: [
-      "automation",
-      "workflow",
-      "dashboard",
-      "analytics",
       "streaming",
       "webrtc",
       "real-time",
@@ -154,17 +151,7 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "conversational",
       "crm",
     ],
-    techMedium: [
-      "automation",
-      "workflow",
-      "dashboard",
-      "analytics",
-      "no-code",
-      "low-code",
-      "newsletter",
-      "campaign",
-      "image-generation",
-    ],
+    techMedium: ["newsletter", "campaign", "image-generation"],
     useCases: [
       {
         department: "TMĐT (Shopee / TikTok Shop)",
