@@ -61,7 +61,16 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "ocr",
       "pose-estimation",
       "anomaly-detection",
-      // IoT / edge / embedded — thiết bị phần cứng
+      // Định vị (định danh DOSCOM)
+      "gps",
+      "geolocation",
+      "fleet-management",
+      // Tín hiệu chuyên biệt (dò sóng / chống ghi âm)
+      "signal-processing",
+      "audio-processing",
+    ],
+    // SUPPORTING — dual-use; 1 mình KHÔNG đủ gắn brand (cần ≥2 hoặc đi cùng 1 core).
+    techMedium: [
       "iot",
       "edge",
       "edge-ai",
@@ -72,19 +81,10 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "mqtt",
       "smart-home",
       "home-automation",
-      // Định vị & tracking
-      "gps",
       "tracking",
-      "geolocation",
-      "fleet-management",
-      // Privacy / security / signal
-      "privacy",
       "security",
+      "privacy",
       "encryption",
-      "signal-processing",
-      "audio-processing",
-    ],
-    techMedium: [
       "streaming",
       "webrtc",
       "real-time",
@@ -124,10 +124,10 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       '"gps tracking"',
       '"object detection"',
       '"anomaly detection"',
-      '"smart home"',
       '"face recognition"',
       '"video analytics"',
-      "iot",
+      '"motion detection"',
+      '"pose estimation"',
     ],
   },
   noma: {
@@ -138,7 +138,7 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "Chăm sóc ô tô DIY chuẩn Mỹ (~17 SKU hoá chất). Bán mạnh Shopee (~60%) + TikTok (~30%). Khách: chủ xe tự làm tại nhà.",
     tagline: "Chăm sóc xe chuẩn Mỹ — tự làm tại nhà.",
     techHigh: [
-      // Ecommerce / marketplace — kênh bán lõi
+      // Ecommerce / marketplace — kênh bán lõi (định danh NOMA)
       "ecommerce",
       "e-commerce",
       "marketplace",
@@ -147,29 +147,33 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "woocommerce",
       "cart",
       "checkout",
+      "order-management",
+      "fulfillment",
+      // Content / bán hàng đặc thù TikTok/Shopee
+      "video-editing",
+      "livestream",
+      "affiliate",
+    ],
+    // SUPPORTING — dual-use; 1 mình KHÔNG đủ gắn brand (cần ≥2 hoặc đi cùng 1 core).
+    techMedium: [
       "recommendation",
       "pricing",
       "inventory",
-      "order-management",
-      "fulfillment",
-      // Content / social / video — TikTok/Shopee content
-      "video-editing",
       "ffmpeg",
       "short-video",
       "social-media",
       "ugc",
-      "livestream",
-      "affiliate",
       "seo",
       "marketing-automation",
       "content-generation",
-      // CSKH
       "chatbot",
       "helpdesk",
       "conversational",
       "crm",
+      "newsletter",
+      "campaign",
+      "image-generation",
     ],
-    techMedium: ["newsletter", "campaign", "image-generation"],
     useCases: [
       {
         department: "TMĐT (Shopee / TikTok Shop)",
@@ -208,12 +212,12 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "woocommerce",
       '"video editing"',
       "livestream",
-      '"product recommendation"',
       '"order management"',
-      "ffmpeg",
       '"shopping cart"',
       "affiliate",
       "storefront",
+      "checkout",
+      "fulfillment",
     ],
   },
 };

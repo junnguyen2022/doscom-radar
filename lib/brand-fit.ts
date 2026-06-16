@@ -58,10 +58,15 @@ export function computeBrandFit(input: {
 
   const fits: BrandFit[] = [];
   for (const b of BRAND_LIST) {
-    const high = keywordHits(hay, b.techHigh);
-    const med = keywordHits(hay, b.techMedium);
+    const high = keywordHits(hay, b.techHigh); // core — định danh
+    const med = keywordHits(hay, b.techMedium); // supporting — dual-use
+
+    // Chống match lỏng: chỉ coi là "hợp brand" khi có ≥1 tín hiệu CORE,
+    // hoặc ≥2 tín hiệu SUPPORTING (1 từ dùng-chung đơn lẻ KHÔNG đủ).
+    const qualifies = high.length >= 1 || med.length >= 2;
+    if (!qualifies) continue;
+
     const score = Math.min(100, high.length * HIGH_PTS + med.length * MED_PTS);
-    if (score <= 0) continue;
     fits.push({
       brand: b.id,
       brandName: b.name,

@@ -2,11 +2,8 @@
 // Rule-based, Vietnamese labels. Inputs: topics, language, README text/keywords.
 // Brand taxonomy: lib/config/brand-core.ts (single source).
 
-import {
-  BRAND_LIST,
-  HOLDINGS_SHARED_HIGH,
-  type BrandId,
-} from "./config/brand-core";
+import { BRANDS, HOLDINGS_SHARED_HIGH, type BrandId } from "./config/brand-core";
+import { computeBrandFit } from "./brand-fit";
 
 export type DoscomMatch = {
   // "doscom" | "noma" | "holdings" — holdings = AI/automation backbone dùng chung.
@@ -42,23 +39,27 @@ export function mapDoscomUseCases(input: {
   readmeOverview?: string;
   readmeFeatures?: string[];
 }): DoscomMatch[] {
-  const hay = buildHaystack(input);
   const matches: DoscomMatch[] = [];
 
-  for (const brand of BRAND_LIST) {
-    // Chỉ match qua tín hiệu ĐỊNH DANH (techHigh) để tránh gắn nhầm nhãn brand từ
-    // từ khoá chung (vd repo LLM bị tag "Camera AI"). techMedium chỉ dùng cho scoring.
-    const hits = brand.techHigh.filter((k) => hay.includes(k));
-    if (hits.length === 0) continue;
+  // Dùng CHUNG quy tắc qualification với brand-fit (≥1 core hoặc ≥2 supporting)
+  // để chip /trending và use-case /repo luôn nhất quán.
+  const fits = computeBrandFit({
+    topics: input.topics,
+    language: input.language,
+    description: [input.description, input.readmeOverview]
+      .filter(Boolean)
+      .join(" "),
+  });
 
-    // Mỗi use-case department của brand → 1 match (chip hiển thị có nhãn brand).
+  for (const fit of fits) {
+    const brand = BRANDS[fit.brand];
     for (const uc of brand.useCases) {
       matches.push({
         brand: brand.id,
         brandName: brand.name,
         department: `${brand.name} · ${uc.department}`,
         useCases: uc.cases,
-        matchedSignals: hits.slice(0, 5),
+        matchedSignals: fit.matched.slice(0, 5),
       });
     }
   }
@@ -66,6 +67,7 @@ export function mapDoscomUseCases(input: {
   // Holdings backbone — AI/automation dùng chung, chỉ thêm khi CHƯA khớp brand nào
   // (tránh nhiễu khi repo đã rõ thuộc DOSCOM/NOMA).
   if (matches.length === 0) {
+    const hay = buildHaystack(input);
     const sharedHits = HOLDINGS_SHARED_HIGH.filter((k) => hay.includes(k));
     if (sharedHits.length > 0) {
       matches.push({
