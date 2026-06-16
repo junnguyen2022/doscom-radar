@@ -26,7 +26,8 @@ import {
   getLatestMetrics,
   type MetricRow,
 } from "@/lib/enrichment";
-import { getLatestScoreForRepo } from "@/lib/scoring-store";
+import { getLatestScoreForRepo, scoreOneRepo } from "@/lib/scoring-store";
+import { ensureRepoEnriched } from "@/lib/on-demand";
 import { getDecisionHistoryForRepo } from "@/lib/decisions-store";
 import { getLatestInsight } from "@/lib/insight-generator";
 import { ScoreBreakdown, type ScoreData } from "@/components/repo/ScoreBreakdown";
@@ -220,12 +221,15 @@ export default async function RepoDetail({
   const { owner, repo } = await params;
 
   // Wave 1 — required for above-the-fold render.
-  const [daily, weekly, monthly, repository] = await Promise.all([
+  const [daily, weekly, monthly, repoFromDb] = await Promise.all([
     historyForRepo(owner, repo, "daily"),
     historyForRepo(owner, repo, "weekly"),
     historyForRepo(owner, repo, "monthly"),
     getRepository(owner, repo),
   ]);
+
+  // Repo chưa từng trending (vd mở từ Brand Discovery) → enrich on-demand.
+  const repository = repoFromDb ?? (await ensureRepoEnriched(owner, repo));
 
   // Wave 2 — enriched metrics + score + decisions + insight (depends on repository.id).
   // README + similar repos are streamed via Suspense below the fold.
@@ -261,6 +265,30 @@ export default async function RepoDetail({
       }
     : null;
 
+  // Repo vừa enrich on-demand chưa có row trong repo_scores → chấm điểm live
+  // (cron sẽ persist + sinh AI insight ở lần chạy kế tiếp).
+  let liveScore: ScoreData | null = null;
+  if (!scoreRow && repository) {
+    const r = await scoreOneRepo(repository.id);
+    if (r) {
+      liveScore = {
+        radar_score: r.radar_score,
+        heat_score: r.heat_score,
+        growth_score: r.growth_score,
+        activity_score: r.activity_score,
+        community_score: r.community_score,
+        maintenance_score: r.maintenance_score,
+        relevance_score: r.relevance_score,
+        risk_penalty: r.risk_penalty,
+        recommendation: r.recommendation,
+        confidence: r.confidence,
+        risk_flags: r.risk_flags,
+        relevance_tier: r.relevance_tier,
+        score_reason: r.score_reason,
+      };
+    }
+  }
+
   const score: ScoreData | null = scoreRow
     ? {
         radar_score: Number(scoreRow.radar_score),
@@ -277,7 +305,7 @@ export default async function RepoDetail({
         relevance_tier: scoreRow.relevance_tier,
         score_reason: scoreRow.score_reason,
       }
-    : null;
+    : liveScore;
 
   if (
     daily.length === 0 &&
