@@ -114,7 +114,7 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       'Không content "theo dõi/nghe lén người khác" — chỉ "bảo vệ chính mình"',
       'Từ cấm: "rẻ nhất", "theo dõi bí mật", "nghe lén"',
     ],
-    // Tối đa 6 term (giới hạn 5 OR của GitHub Search). KHÔNG bọc ngoặc.
+    // Chia chunk 6 term/query (giới hạn 5 OR của GitHub Search). KHÔNG bọc ngoặc.
     discoveryTerms: [
       '"computer vision"',
       "cctv",
@@ -122,6 +122,12 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "onvif",
       "surveillance",
       '"gps tracking"',
+      '"object detection"',
+      '"anomaly detection"',
+      '"smart home"',
+      '"face recognition"',
+      '"video analytics"',
+      "iot",
     ],
   },
   noma: {
@@ -194,7 +200,7 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       'Không "xóa hoàn toàn", "100% an toàn", "tốt nhất", "số 1", "bảo vệ vĩnh viễn"',
       'Từ cấm: "rẻ nhất", "siêu rẻ", "hàng xịn", "chính hãng Mỹ", "bảo hành trọn đời"',
     ],
-    // Tối đa 6 term (giới hạn 5 OR của GitHub Search). KHÔNG bọc ngoặc.
+    // Chia chunk 6 term/query (giới hạn 5 OR của GitHub Search). KHÔNG bọc ngoặc.
     discoveryTerms: [
       "ecommerce",
       "marketplace",
@@ -202,6 +208,12 @@ export const BRANDS: Record<BrandId, BrandProfile> = {
       "woocommerce",
       '"video editing"',
       "livestream",
+      '"product recommendation"',
+      '"order management"',
+      "ffmpeg",
+      '"shopping cart"',
+      "affiliate",
+      "storefront",
     ],
   },
 };

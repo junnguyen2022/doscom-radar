@@ -37,8 +37,11 @@ export default async function DiscoverPage({
   const sp = await searchParams;
   const raw = Array.isArray(sp.brand) ? sp.brand[0] : sp.brand;
   const brand: BrandId = raw === "noma" ? "noma" : "doscom";
+  const msRaw = Array.isArray(sp.minStars) ? sp.minStars[0] : sp.minStars;
+  const MIN_STAR_OPTIONS = [50, 150, 500, 2000];
+  const minStars = MIN_STAR_OPTIONS.includes(Number(msRaw)) ? Number(msRaw) : 150;
 
-  const result = await discoverForBrand(brand);
+  const result = await discoverForBrand(brand, { minStars });
 
   return (
     <main>
@@ -64,6 +67,29 @@ export default async function DiscoverPage({
             >
               <Compass className="h-3.5 w-3.5" />
               {b.name}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Min stars filter */}
+      <div className="mb-5 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Sao tối thiểu:
+        </span>
+        {MIN_STAR_OPTIONS.map((n) => {
+          const active = n === minStars;
+          return (
+            <Link
+              key={n}
+              href={`/discover?brand=${brand}&minStars=${n}`}
+              className={
+                active
+                  ? "rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white shadow-sm"
+                  : "rounded-full border border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400"
+              }
+            >
+              {n.toLocaleString()}+
             </Link>
           );
         })}

@@ -46,8 +46,14 @@ function pushedCutoff(monthsBack = 18): string {
   return d.toISOString().slice(0, 10);
 }
 
+function chunk<T>(xs: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
+  return out;
+}
+
 function buildQuery(terms: string[], minStars: number): string {
-  // GitHub Search: tối đa 5 toán tử OR/AND/NOT → giới hạn 6 term.
+  // GitHub Search: tối đa 5 toán tử OR/AND/NOT → tối đa 6 term/query.
   // KHÔNG bọc ngoặc đơn — ngoặc + cụm có nháy ("computer vision") khiến API trả 0.
   const ors = terms.slice(0, 6).join(" OR ");
   // in:name,description = giới hạn nơi khớp để bớt nhiễu; lọc chất lượng tối thiểu.
@@ -81,12 +87,17 @@ export async function discoverForBrand(
 ): Promise<DiscoverResult> {
   const brand = BRANDS[brandId];
   const minStars = opts.minStars ?? 150;
-  const perPage = opts.perPage ?? 40;
-  const limit = opts.limit ?? 24;
-  const query = buildQuery(brand.discoveryTerms, minStars);
+  const perPage = opts.perPage ?? 30;
+  const limit = opts.limit ?? 30;
+
+  // Chia term thành các chunk ≤6 (giới hạn OR) → mỗi chunk 1 query → gộp kết quả.
+  const queries = chunk(brand.discoveryTerms, 6).map((c) =>
+    buildQuery(c, minStars),
+  );
 
   try {
-    const items = await ghSearch(query, perPage);
+    const batches = await Promise.all(queries.map((q) => ghSearch(q, perPage)));
+    const items = batches.flat();
     const repos: DiscoveredRepo[] = [];
     const seen = new Set<string>();
 
@@ -125,7 +136,7 @@ export async function discoverForBrand(
       brand: brandId,
       brandName: brand.name,
       repos: repos.slice(0, limit),
-      query,
+      query: queries.join("  |  "),
       error: null,
     };
   } catch (e) {
@@ -133,7 +144,7 @@ export async function discoverForBrand(
       brand: brandId,
       brandName: brand.name,
       repos: [],
-      query,
+      query: queries.join("  |  "),
       error: e instanceof Error ? e.message : String(e),
     };
   }
