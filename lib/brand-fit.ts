@@ -61,10 +61,10 @@ export function computeBrandFit(input: {
     const high = keywordHits(hay, b.techHigh); // core — định danh
     const med = keywordHits(hay, b.techMedium); // supporting — dual-use
 
-    // Chống match lỏng: chỉ coi là "hợp brand" khi có ≥1 tín hiệu CORE,
-    // hoặc ≥2 tín hiệu SUPPORTING (1 từ dùng-chung đơn lẻ KHÔNG đủ).
-    const qualifies = high.length >= 1 || med.length >= 2;
-    if (!qualifies) continue;
+    // Chống match lỏng: BẮT BUỘC ≥1 tín hiệu CORE (định danh) mới coi là hợp brand.
+    // Supporting (dual-use như streaming/raspberry-pi/iot) chỉ CỘNG điểm, không bao giờ
+    // tự qualify — nếu không 1 media-server (streaming + raspberry-pi) sẽ lọt DOSCOM.
+    if (high.length < 1) continue;
 
     const score = Math.min(100, high.length * HIGH_PTS + med.length * MED_PTS);
     fits.push({
