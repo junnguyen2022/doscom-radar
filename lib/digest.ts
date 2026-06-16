@@ -85,6 +85,51 @@ function brandSpotlightSection(rows: SnapshotRow[], perBrand = 5): string[] {
   return lines;
 }
 
+// Bản tin brand gọn cho chat (Lark/Slack) — text thuần, không markdown nặng.
+export function generateBrandDigestText(
+  rows: SnapshotRow[],
+  capturedAt: string,
+  perBrand = 5,
+): string {
+  const lines: string[] = [];
+  lines.push(`📡 Agent Radar — Brand Spotlight tuần (${capturedAt})`);
+
+  const scored = rows.map((r) => ({
+    row: r,
+    fits: computeBrandFit({ language: r.language, description: r.description }),
+  }));
+
+  for (const brand of BRAND_LIST) {
+    const matched = scored
+      .map((s) => ({ row: s.row, fit: s.fits.find((f) => f.brand === brand.id) }))
+      .filter((x): x is { row: SnapshotRow; fit: NonNullable<typeof x.fit> } =>
+        Boolean(x.fit),
+      )
+      .sort(
+        (a, b) =>
+          b.fit.score - a.fit.score ||
+          (b.row.stars_gained ?? 0) - (a.row.stars_gained ?? 0),
+      )
+      .slice(0, perBrand);
+
+    lines.push("");
+    lines.push(`${BRAND_EMOJI[brand.id] ?? ""} ${brand.name}`);
+    if (matched.length === 0) {
+      lines.push("  (tuần này chưa có repo trending khớp rõ)");
+      continue;
+    }
+    for (const m of matched) {
+      lines.push(
+        `  • ${m.row.owner}/${m.row.repo} — fit ${m.fit.score}/${m.fit.tier} · ${(m.row.total_stars ?? 0).toLocaleString()}★`,
+      );
+    }
+  }
+
+  lines.push("");
+  lines.push("→ Chi tiết: https://doscom-radar.vercel.app/discover");
+  return lines.join("\n");
+}
+
 export function generateMarkdownDigest(data: DigestData): string {
   const lines: string[] = [];
 
