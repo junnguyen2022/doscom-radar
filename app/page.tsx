@@ -17,7 +17,13 @@ import {
   trendingKeysFromRows,
 } from "@/lib/collections";
 import { generateInsight } from "@/lib/actions";
+import { computeBrandFit } from "@/lib/brand-fit";
+import { BRAND_LIST } from "@/lib/config/brand-core";
 import { Hero } from "@/components/home/Hero";
+import {
+  BrandSpotlight,
+  type BrandGroup,
+} from "@/components/home/BrandSpotlight";
 import { HotCollections } from "@/components/home/HotCollections";
 import {
   TrendingTable,
@@ -120,6 +126,37 @@ export default async function Home() {
     .sort((a, b) => b.matchedRows.length - a.matchedRows.length)
     .slice(0, 8);
 
+  // Brand picks cho Dashboard — top repo hợp DOSCOM/NOMA (weekly, fallback daily).
+  const brandRows = weekly.length > 0 ? weekly : daily;
+  const brandScored = brandRows.map((r) => ({
+    r,
+    fits: computeBrandFit({ language: r.language, description: r.description }),
+  }));
+  const brandGroups: BrandGroup[] = BRAND_LIST.map((brand) => ({
+    brandId: brand.id,
+    brandName: brand.name,
+    items: brandScored
+      .map((s) => ({ r: s.r, fit: s.fits.find((f) => f.brand === brand.id) }))
+      .filter((x): x is { r: SnapshotRow; fit: NonNullable<typeof x.fit> } =>
+        Boolean(x.fit),
+      )
+      .sort(
+        (a, b) =>
+          b.fit.score - a.fit.score ||
+          (b.r.total_stars ?? 0) - (a.r.total_stars ?? 0),
+      )
+      .slice(0, 4)
+      .map((x) => ({
+        owner: x.r.owner,
+        repo: x.r.repo,
+        url: x.r.url,
+        score: x.fit.score,
+        tier: x.fit.tier,
+        stars: x.r.total_stars,
+        language: x.r.language,
+      })),
+  }));
+
   // Movers preview
   let moversPreview: ReturnType<typeof computeMovers> | null = null;
   if (dates.length >= 2) {
@@ -149,6 +186,8 @@ export default async function Home() {
         history={history}
         lastSnapshot={info.capturedAt ?? capturedAt}
       />
+
+      <BrandSpotlight groups={brandGroups} />
 
       {/* AI Insight + Movers row */}
       <section className="mb-12 grid gap-4 lg:grid-cols-[2fr_1fr]">
