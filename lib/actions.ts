@@ -1,7 +1,7 @@
 "use server";
 
-import Anthropic from "@anthropic-ai/sdk";
 import { fetchAllTrending } from "./github-trending";
+import { generateText } from "./llm";
 import {
   upsertSnapshots,
   allRowsForLatestDate,
@@ -52,8 +52,8 @@ export async function runSnapshotAction(): Promise<{
 
 const generateInsightCached = unstable_cache(
   async (): Promise<string> => {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return "_(Chưa cấu hình ANTHROPIC_API_KEY — skip AI insight.)_";
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+      return "_(Chưa cấu hình API key AI — skip AI insight.)_";
     }
 
     const { rows: daily } = await allRowsForLatestDate("daily");
@@ -92,24 +92,13 @@ Viết bằng TIẾNG VIỆT một insight ngắn 5-8 dòng:
 
 Đừng liệt kê lại — phải có nhận định, opinion. Concise, không marketing fluff.`;
 
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 800,
-      system: [
-        {
-          type: "text",
-          text: "Bạn là analyst công nghệ Việt Nam, viết tiếng Việt tự nhiên, súc tích. Không dùng marketing fluff.",
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: prompt }],
+    const { text } = await generateText({
+      system:
+        "Bạn là analyst công nghệ Việt Nam, viết tiếng Việt tự nhiên, súc tích. Không dùng marketing fluff.",
+      user: prompt,
+      maxTokens: 800,
     });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    return textBlock && textBlock.type === "text"
-      ? textBlock.text
-      : "_(Empty response from Claude.)_";
+    return text;
   },
   ["ai-insight"],
   { revalidate: 3600 }, // 1 hour
@@ -118,7 +107,8 @@ Viết bằng TIẾNG VIỆT một insight ngắn 5-8 dòng:
 export async function generateInsight(): Promise<string> {
   try {
     return await generateInsightCached();
-  } catch (err) {
-    return `_(AI insight error: ${err instanceof Error ? err.message : String(err)})_`;
+  } catch {
+    // Degrade nhẹ nhàng — KHÔNG dump lỗi thô (credit/401…) ra cho người xem.
+    return "_(AI insight tạm thời không khả dụng — sẽ tự cập nhật ở lần làm mới sau.)_";
   }
 }

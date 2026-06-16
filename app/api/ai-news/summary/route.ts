@@ -3,12 +3,11 @@
 // Cost-controlled: max 800 input tokens, 400 output, ≤30 calls per day per process.
 
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText } from "@/lib/llm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = "claude-sonnet-4-6";
 const MAX_PER_DAY = 30;
 
 type CacheEntry = { date: string; summary: string };
@@ -20,9 +19,9 @@ function today() {
 }
 
 export async function POST(req: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
     return NextResponse.json(
-      { error: "AI summary disabled (no ANTHROPIC_API_KEY)." },
+      { error: "AI summary disabled (no AI API key)." },
       { status: 503 },
     );
   }
@@ -54,7 +53,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const client = new Anthropic();
   const prompt = `You are summarising an AI news item for a Vietnamese SME called Doscom Holdings (focus: AI agents, RAG, automation, ecommerce, BI, customer support).
 Item:
   Title: ${title}
@@ -69,30 +67,18 @@ Return 3-5 short bullet points in Vietnamese covering:
 No preamble. Plain text bullets prefixed with "•".`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 400,
-      messages: [{ role: "user", content: prompt }],
+    const { text } = await generateText({
+      system:
+        "You summarise AI news concisely in Vietnamese plain-text bullets.",
+      user: prompt,
+      maxTokens: 400,
     });
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-    if (!text) {
-      return NextResponse.json(
-        { error: "Empty AI response" },
-        { status: 502 },
-      );
-    }
     cache.set(key, { date: day, summary: text });
     usage.set(day, used + 1);
     return NextResponse.json({ summary: text, cached: false });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      {
-        error: `AI request failed: ${err instanceof Error ? err.message : String(err)}`,
-      },
+      { error: "AI tạm thời không khả dụng. Thử lại sau." },
       { status: 502 },
     );
   }
